@@ -25,10 +25,10 @@ function gerarListaPresencaHTML(atividade, participantesSelecionados) {
       const p = pessoasNamed[i]
       linhas.push(`<tr>
         <td style="text-align:center;color:#888;width:32px">${i + 1}</td>
-        <td style="padding:0 12px">${p ? `<strong>${p.nome}</strong>${p.idade ? ` <span style="color:#888;font-size:11px">(${p.idade}a)</span>` : ''}` : ''}</td>
-        <td style="width:60px;text-align:center;font-size:11px;color:#666">${tipo}</td>
+        <td style="padding:0 12px"><strong>${p ? p.nome : ''}</strong></td>
+        ${tipo === 'Criança' ? `<td style="text-align:center;font-size:12px;color:#555">${p?.idade ? p.idade + 'a' : ''}</td>` : ''}
         <td style="height:36px;width:90px"></td>
-        ${tipo === 'Criança' ? `<td style="width:120px;font-size:11px;color:#666">${p?.nome_responsavel || ''}</td>` : ''}
+        ${tipo === 'Criança' ? `<td style="width:120px;font-size:11px;color:#666">${p?.nome_responsavel ? (p.parentesco||'') + ': ' + p.nome_responsavel : ''}</td>` : ''}
       </tr>`)
     }
     return linhas.join('')
@@ -87,7 +87,7 @@ function gerarListaPresencaHTML(atividade, participantesSelecionados) {
   ${qtdCriancas > 0 ? `
   <h3>👧 Crianças</h3>
   <table>
-    <thead><tr><th>#</th><th>Nome Completo</th><th>Tipo</th><th>Assinatura</th><th>Responsável</th></tr></thead>
+    <thead><tr><th>#</th><th>Nome Completo</th><th style='text-align:center;width:50px'>Idade</th><th>Assinatura</th><th>Responsável</th></tr></thead>
     <tbody>${renderLinhas(linhasCriancas, qtdCriancas, 'Criança')}</tbody>
   </table>` : ''}
   ${qtdAdultos > 0 ? `

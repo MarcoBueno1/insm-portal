@@ -11,18 +11,20 @@ import Diretores from './pages/Diretores'
 import Atividades from './pages/Atividades'
 import Registros from './pages/Registros'
 import Metricas from './pages/Metricas'
+import Participantes from './pages/Participantes'
+import Relatorios from './pages/Relatorios'
 import Estoque from './pages/Estoque'
 import Materiais from './pages/Materiais'
+import Relatorios from './pages/Relatorios'
 import Usuarios from './pages/Usuarios'
-import Participantes from './pages/Participantes'
 import { ToastProvider } from './hooks/useToast'
 
 export const AuthContext = createContext(null)
 export const useAuth = () => useContext(AuthContext)
 
 function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
-  const [perfil, setPerfil] = useState(null)
+  const [user, setUser]       = useState(null)
+  const [perfil, setPerfil]   = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -31,7 +33,7 @@ function AuthProvider({ children }) {
       if (session?.user) loadPerfil(session.user.id)
       else setLoading(false)
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null)
       if (session?.user) loadPerfil(session.user.id)
       else { setPerfil(null); setLoading(false) }
@@ -43,12 +45,12 @@ function AuthProvider({ children }) {
     try {
       const { data } = await supabase.from('perfis').select('*').eq('id', userId).single()
       setPerfil(data)
-    } catch { setPerfil({ perfil: 'leitura' }) }
+    } catch { setPerfil({ perfil:'leitura' }) }
     finally { setLoading(false) }
   }
 
-  const isAdmin = perfil?.perfil === 'admin'
-  const isCoord = perfil?.perfil === 'coord' || isAdmin
+  const isAdmin  = perfil?.perfil === 'admin'
+  const isCoord  = perfil?.perfil === 'coord' || isAdmin
   const nomeUser = perfil?.nome || user?.email?.split('@')[0] || 'Usuário'
 
   return (
@@ -79,16 +81,17 @@ export default function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route index element={<Dashboard />} />
-                <Route path="mural" element={<Mural />} />
-                <Route path="coordenadores" element={<Coordenadores />} />
-                <Route path="diretores" element={<Diretores />} />
-                <Route path="atividades" element={<Atividades />} />
-                <Route path="registros" element={<Registros />} />
-                <Route path="metricas" element={<Metricas />} />
-                <Route path="estoque" element={<Estoque />} />
-                <Route path="materiais" element={<Materiais />} />
-                <Route path="participantes" element={<Participantes />} />
-                <Route path="usuarios" element={<Usuarios />} />
+                <Route path="mural"          element={<Mural />} />
+                <Route path="coordenadores"  element={<Coordenadores />} />
+                <Route path="diretores"      element={<Diretores />} />
+                <Route path="atividades"     element={<Atividades />} />
+                <Route path="registros"      element={<Registros />} />
+                <Route path="metricas"       element={<Metricas />} />
+                <Route path="participantes"  element={<Participantes />} />
+                <Route path="estoque"        element={<Estoque />} />
+                <Route path="materiais"      element={<Materiais />} />
+                <Route path="relatorios"     element={<Relatorios />} />
+                <Route path="usuarios"       element={<Usuarios />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
