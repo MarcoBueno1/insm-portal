@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../App'
 import { useToast } from '../hooks/useToast'
 import Modal from '../components/Modal'
+import SelectCadastravel from '../components/SelectCadastravel'
 
 export default function Coordenadores() {
   const { isAdmin, isCoord } = useAuth()
@@ -130,7 +131,7 @@ export default function Coordenadores() {
         </div>
         <div className="form-group">
           <label className="form-label">Área de Responsabilidade *</label>
-          <input className="form-input" placeholder="Ex: Compras & Materiais" value={form.area} onChange={e => setForm(f => ({ ...f, area: e.target.value }))} />
+          <SelectCadastravel categoria="areas_coordenador" value={form.area} onChange={v => setForm(f => ({ ...f, area: v }))} placeholder="Selecione a área..." />
         </div>
         <div className="form-group">
           <label className="form-label">Descrição do Papel</label>

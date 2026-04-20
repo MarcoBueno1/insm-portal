@@ -4,6 +4,7 @@ import { useAuth } from '../App'
 import { useToast } from '../hooks/useToast'
 import Modal from '../components/Modal'
 import { gerarRelatorioComprasPDF } from '../lib/pdf'
+import SelectCadastravel from '../components/SelectCadastravel'
 
 const CATS = ['Material de Arte', 'Papelaria', 'Limpeza', 'Alimentos', 'Liturgia', 'Informática', 'Outros']
 const EMPTY = { data: new Date().toISOString().slice(0,10), item: '', categoria: CATS[0], quantidade: 1, valor_unitario: '', atividade_id: '', atividade_nome: '', responsavel: '', observacao: '' }
@@ -34,7 +35,7 @@ function BarChart({ dados, max }) {
 }
 
 export default function Materiais() {
-  const { isCoord, nomeUser } = useAuth()
+  const { isCoord, nomeUser, user } = useAuth()
   const toast = useToast()
   const [lista, setLista] = useState([])
   const [atividades, setAtividades] = useState([])
@@ -66,6 +67,8 @@ export default function Materiais() {
       ...form,
       quantidade: parseFloat(form.quantidade) || 1,
       valor_unitario: parseFloat(form.valor_unitario) || 0,
+      usuario_nome: nomeUser,
+      criado_por: user?.id,
     }
     const { error } = await supabase.from('compras').insert(payload)
     if (error) toast('Erro: ' + error.message, 'error')
@@ -145,7 +148,7 @@ export default function Materiais() {
             <select className="form-select" style={{ width: 'auto', padding: '8px 32px 8px 12px', fontSize: '13px' }}
               value={filtroCat} onChange={e => setFiltroCat(e.target.value)}>
               <option value="">Todas as categorias</option>
-              {CATS.map(c => <option key={c}>{c}</option>)}
+              {["Material de Arte","Papelaria","Limpeza","Alimentos","Liturgia","Informática","Outros"].map(c => <option key={c}>{c}</option>)}
             </select>
             <select className="form-select" style={{ width: 'auto', padding: '8px 32px 8px 12px', fontSize: '13px' }}
               value={filtroAt} onChange={e => setFiltroAt(e.target.value)}>
@@ -190,6 +193,7 @@ export default function Materiais() {
                         <td style={{ textAlign: 'right', fontWeight: '800', color: 'var(--azul)', fontSize: '13.5px' }}>R$ {Number(c.valor_total || 0).toFixed(2)}</td>
                         <td style={{ fontSize: '12px', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.atividade_nome || <span style={{ color: 'var(--cinza)' }}>—</span>}</td>
                         <td style={{ fontSize: '12.5px' }}>{c.responsavel || '—'}</td>
+                      <td style={{ fontSize: '12px', color: 'var(--cinza-medio)' }}>{c.usuario_nome || c.responsavel || '—'}</td>
                         {isCoord && <td><button className="btn btn-sm btn-danger" onClick={() => remover(c.id)}>🗑</button></td>}
                       </tr>
                     ))}
@@ -218,9 +222,7 @@ export default function Materiais() {
         <div className="form-row form-row-2">
           <div className="form-group">
             <label className="form-label">Categoria</label>
-            <select className="form-select" value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}>
-              {CATS.map(c => <option key={c}>{c}</option>)}
-            </select>
+            <SelectCadastravel categoria="categorias_compra" value={form.categoria} onChange={v => setForm(f => ({ ...f, categoria: v }))} placeholder="Selecione..." />
           </div>
           <div className="form-group">
             <label className="form-label">Data da Compra *</label>

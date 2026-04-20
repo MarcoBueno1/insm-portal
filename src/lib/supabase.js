@@ -194,3 +194,105 @@ create or replace trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 `
+
+// ============================================================
+// SQL ADICIONAL — Execute no Supabase SQL Editor
+// (além do SCHEMA_SQL já existente)
+// ============================================================
+export const SCHEMA_SQL_V2 = `
+-- TABELA DIRETORES
+create table if not exists diretores (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null,
+  area text not null,
+  descricao text,
+  whatsapp text,
+  email text,
+  foto_url text,
+  ordem int default 0,
+  ativo boolean default true,
+  criado_em timestamptz default now()
+);
+alter table diretores enable row level security;
+create policy "auth_all" on diretores for all using (auth.role() = 'authenticated');
+
+-- TABELA TAREFAS_ATIVIDADE (responsáveis + tarefas por atividade)
+create table if not exists tarefas_atividade (
+  id uuid primary key default gen_random_uuid(),
+  atividade_id uuid references atividades(id) on delete cascade,
+  pessoa_id uuid,
+  pessoa_nome text not null,
+  pessoa_tipo text not null, -- 'coordenador' | 'diretor'
+  tarefa text not null,
+  criado_em timestamptz default now()
+);
+alter table tarefas_atividade enable row level security;
+create policy "auth_all" on tarefas_atividade for all using (auth.role() = 'authenticated');
+
+-- COLUNAS DE PRESENÇA REAL (adicionar à tabela atividades existente)
+alter table atividades add column if not exists real_criancas int;
+alter table atividades add column if not exists real_adultos int;
+
+-- TABELA OPÇÕES CONFIGURÁVEIS
+create table if not exists opcoes_sistema (
+  id uuid primary key default gen_random_uuid(),
+  categoria text not null,
+  valor text not null,
+  ordem int default 0,
+  criado_em timestamptz default now(),
+  unique(categoria, valor)
+);
+alter table opcoes_sistema enable row level security;
+create policy "auth_all" on opcoes_sistema for all using (auth.role() = 'authenticated');
+
+-- Dados iniciais das opções
+insert into opcoes_sistema (categoria, valor, ordem) values
+  ('temas_atividade','Arte Sacra',0),
+  ('temas_atividade','Retiros Espirituais',1),
+  ('temas_atividade','Catequese',2),
+  ('temas_atividade','Terço & Oração',3),
+  ('temas_atividade','Formação Familiar',4),
+  ('temas_atividade','Missa das Crianças',5),
+  ('temas_atividade','Adoração Eucarística',6),
+  ('temas_atividade','Formação de Catequistas',7),
+  ('temas_atividade','Outro',8),
+  ('locais_atividade','Salão Principal',0),
+  ('locais_atividade','Salão de Reuniões',1),
+  ('locais_atividade','Pátio do Instituto',2),
+  ('locais_atividade','Casa de Retiro',3),
+  ('locais_atividade','Igreja Matriz',4),
+  ('locais_atividade','Auditório',5),
+  ('categorias_estoque','Material de Arte',0),
+  ('categorias_estoque','Papelaria',1),
+  ('categorias_estoque','Limpeza',2),
+  ('categorias_estoque','Alimentos',3),
+  ('categorias_estoque','Liturgia',4),
+  ('categorias_estoque','Informática',5),
+  ('categorias_estoque','Outros',6),
+  ('categorias_compra','Material de Arte',0),
+  ('categorias_compra','Papelaria',1),
+  ('categorias_compra','Limpeza',2),
+  ('categorias_compra','Alimentos',3),
+  ('categorias_compra','Liturgia',4),
+  ('categorias_compra','Informática',5),
+  ('categorias_compra','Outros',6),
+  ('areas_coordenador','Coordenação Geral',0),
+  ('areas_coordenador','Atividades & Eventos',1),
+  ('areas_coordenador','Catequese Infantil',2),
+  ('areas_coordenador','Compras & Materiais',3),
+  ('areas_coordenador','Orientação Espiritual',4),
+  ('areas_coordenador','Finanças & Contas',5),
+  ('areas_coordenador','Comunicação',6),
+  ('areas_diretor','Direção Geral',0),
+  ('areas_diretor','Direção Pedagógica',1),
+  ('areas_diretor','Direção Administrativa',2),
+  ('areas_diretor','Direção Financeira',3),
+  ('areas_diretor','Direção Espiritual',4),
+  ('unidades_estoque','un',0),
+  ('unidades_estoque','cx',1),
+  ('unidades_estoque','pacote',2),
+  ('unidades_estoque','resma',3),
+  ('unidades_estoque','kg',4),
+  ('unidades_estoque','L',5)
+on conflict (categoria, valor) do nothing;
+`
