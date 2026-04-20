@@ -15,7 +15,6 @@ import Participantes from './pages/Participantes'
 import Relatorios from './pages/Relatorios'
 import Estoque from './pages/Estoque'
 import Materiais from './pages/Materiais'
-import Relatorios from './pages/Relatorios'
 import Usuarios from './pages/Usuarios'
 import { ToastProvider } from './hooks/useToast'
 
