@@ -4,7 +4,7 @@ import { useAuth } from '../App'
 import { useToast } from '../hooks/useToast'
 import Modal from '../components/Modal'
 import SelectCadastravel from '../components/SelectCadastravel'
-import { abrirGoogleCalendar, formatarData } from '../lib/pdf'
+import { abrirGoogleCalendar, formatarData } from "../lib/utils";
 
 // Gera lista de presença com nomes dos participantes cadastrados
 function gerarListaPresencaHTML(atividade, participantesSelecionados) {

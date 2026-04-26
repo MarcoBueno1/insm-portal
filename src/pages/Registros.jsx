@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../App'
 import { useToast } from '../hooks/useToast'
-import { gerarListaPresencaPDF, formatarData } from '../lib/pdf'
+import { gerarListaPresencaPDF } from "../lib/pdf";
+import { formatarData } from "../lib/utils";
 import Modal from '../components/Modal'
 
 export default function Registros() {
