@@ -15,7 +15,9 @@ const NAV = [
   { to:'/relatorios',    icon:'📄', label:'Relatórios',        section:'Cadastros' },
   { to:'/estoque',       icon:'📦', label:'Estoque',           section:'Gestão' },
   { to:'/materiais',     icon:'🛒', label:'Compras',           section:'Gestão' },
+  { to:'/financeiro',    icon:'💰', label:'Contas',            section:'Financeiro' },
   { to:'/usuarios',      icon:'🔐', label:'Usuários',          section:'Admin', adminOnly:true },
+  { to:'/auditoria',     icon:'🔍', label:'Auditoria',         section:'Admin', adminOnly:true },
 ]
 
 export default function Layout() {
@@ -50,7 +52,7 @@ export default function Layout() {
       {/* ════ SIDEBAR ════ */}
       <aside style={{
         width: 250,
-        minHeight: '100vh',
+        height: '100vh',
         background: 'linear-gradient(180deg,#0d1f42 0%,#1a3a6b 60%,#1e4578 100%)',
         display: 'flex',
         flexDirection: 'column',
@@ -60,7 +62,7 @@ export default function Layout() {
         transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
         transition: 'transform .28s cubic-bezier(.4,0,.2,1)',
         boxShadow: sidebarOpen ? '4px 0 24px rgba(0,0,0,.35)' : 'none',
-        overflowY: 'auto',
+        overflowY: 'hidden',
         overflowX: 'hidden',
       }}>
 
@@ -76,8 +78,16 @@ export default function Layout() {
           </div>
         </div>
 
-        {/* Nav — rolagem interna */}
-        <nav style={{ flex:1, padding:'10px 8px', overflowY:'auto', overflowX:'hidden' }}>
+        {/* Nav — rolagem interna com scrollbar visível */}
+        <nav style={{
+          flex:1,
+          padding:'10px 8px',
+          overflowY:'auto',
+          overflowX:'hidden',
+          /* scrollbar visível para indicar que há mais itens */
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgba(201,162,39,.4) rgba(255,255,255,.05)',
+        }}>
           {Object.entries(sections).map(([section, items]) => (
             <div key={section}>
               <div style={{ fontSize:9, color:'rgba(201,162,39,.6)', letterSpacing:2, textTransform:'uppercase', fontWeight:800, padding:'12px 10px 5px' }}>
