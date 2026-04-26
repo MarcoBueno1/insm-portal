@@ -1,216 +1,277 @@
-// ── Utilitários de PDF / impressão ──────────────────────────────
+// ============================================================
+//  Instituto Nossa Senhora Menina — PDF Generator
+// ============================================================
 
-export function gerarListaPresencaPDF(atividade, participantesSelecionados = []) {
-  const totalParticipantes = (atividade.qtd_criancas || 0) + (atividade.qtd_adultos || 0)
-  const dataFormatada = atividade.data
-    ? new Date(atividade.data + 'T12:00').toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' })
-    : ''
-
-  const criancasSel = participantesSelecionados.filter(p => p.tipo === 'crianca')
-  const adultosSel  = participantesSelecionados.filter(p => p.tipo === 'adulto')
-
-  const qtdCriancas = Math.max(criancasSel.length, atividade.qtd_criancas || 0)
-  const qtdAdultos  = Math.max(adultosSel.length,  atividade.qtd_adultos  || 0)
-
-  const linhasCriancas = Array.from({ length: qtdCriancas }, (_, i) => {
-    const p = criancasSel[i]
-    return `<tr>
-      <td style="text-align:center;color:#888;width:28px;font-size:11px">${i + 1}</td>
-      <td style="padding:0 8px;min-width:160px">${p ? `<strong>${p.nome}</strong>` : ''}</td>
-      <td style="text-align:center;width:50px;font-weight:700;color:#1a3a6b">${p?.idade ? p.idade : ''}</td>
-      <td style="height:34px;width:100px"></td>
-      <td style="font-size:11px;color:#666;width:120px">${p?.nome_responsavel ? `${p.nome_responsavel}${p.parentesco ? ' ('+p.parentesco+')' : ''}` : ''}</td>
-    </tr>`
-  }).join('')
-
-  const linhasAdultos = Array.from({ length: qtdAdultos }, (_, i) => {
-    const p = adultosSel[i]
-    return `<tr>
-      <td style="text-align:center;color:#888;width:28px;font-size:11px">${i + 1}</td>
-      <td style="padding:0 8px;min-width:180px">${p ? `<strong>${p.nome}</strong>` : ''}</td>
-      <td style="height:34px;width:120px"></td>
-    </tr>`
-  }).join('')
-
-  const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>Lista de Presença — ${atividade.titulo}</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Nunito:wght@400;600;700&display=swap');
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Nunito',Arial,sans-serif;padding:28px;color:#1e2a3a;font-size:12.5px}
-    .header{text-align:center;margin-bottom:18px;padding-bottom:14px;border-bottom:2px solid #c9a227}
-    .header h1{font-family:'Cormorant Garamond',Georgia,serif;font-size:20px;color:#1a3a6b;margin:5px 0 2px}
-    .header .sub{font-size:10px;color:#888;letter-spacing:2px;text-transform:uppercase;font-weight:700}
-    .info{background:#f2f5fb;border-radius:8px;padding:10px 14px;margin-bottom:14px}
-    .info h2{font-family:'Cormorant Garamond',serif;font-size:17px;color:#1a3a6b;margin-bottom:5px}
-    .info-row{display:flex;gap:20px;font-size:11.5px;color:#555;flex-wrap:wrap}
-    .totais{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
-    .total-box{background:#e8eef8;padding:6px 12px;border-radius:6px;font-size:11.5px}
-    .total-box strong{color:#1a3a6b;font-size:15px;display:block}
-    h3{font-size:12px;font-weight:800;color:#1a3a6b;text-transform:uppercase;letter-spacing:.8px;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid #dce3f0}
-    table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:12px}
-    th{background:#1a3a6b;color:white;padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.7px}
-    td{padding:0 10px;border:1px solid #dce3f0}
-    tr:nth-child(even) td{background:#f8faff}
-    .assinatura{margin-top:24px;display:flex;justify-content:space-between;gap:20px}
-    .assin-box{text-align:center;flex:1}
-    .assin-linha{height:1px;background:#555;margin:0 auto 5px}
-    .footer{margin-top:18px;text-align:center;font-size:10px;color:#888;border-top:1px solid #dce3f0;padding-top:10px}
-    @media print{button{display:none!important}body{padding:14px}}
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="sub">Instituto Nossa Senhora Menina</div>
-    <h1>Lista de Presença</h1>
-  </div>
-  <div class="info">
-    <h2>${atividade.titulo}</h2>
-    <div class="info-row">
-      <span>📅 ${dataFormatada}</span>
-      ${atividade.local ? `<span>📍 ${atividade.local}</span>` : ''}
-      ${atividade.tema  ? `<span>🎯 ${atividade.tema}</span>` : ''}
-      ${atividade.hora_inicio ? `<span>⏰ ${atividade.hora_inicio}${atividade.hora_fim ? ' – '+atividade.hora_fim : ''}</span>` : ''}
-    </div>
-  </div>
-  <div class="totais">
-    <div class="total-box"><strong>${qtdCriancas}</strong>crianças previstas</div>
-    <div class="total-box"><strong>${qtdAdultos}</strong>adultos previstos</div>
-    <div class="total-box"><strong>${qtdCriancas + qtdAdultos}</strong>total previsto</div>
-    ${participantesSelecionados.length > 0 ? `<div class="total-box" style="background:#eaf5ee"><strong style="color:#2e7d52">${participantesSelecionados.length}</strong>com nome pré-preenchido</div>` : ''}
-  </div>
-
-  ${qtdCriancas > 0 ? `
-  <h3>👧 Crianças</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>Nome Completo</th>
-        <th style="text-align:center">Idade</th>
-        <th>Assinatura</th>
-        <th>Responsável</th>
-      </tr>
-    </thead>
-    <tbody>${linhasCriancas}</tbody>
-  </table>` : ''}
-
-  ${qtdAdultos > 0 ? `
-  <h3>👨 Adultos</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>Nome Completo</th>
-        <th>Assinatura</th>
-      </tr>
-    </thead>
-    <tbody>${linhasAdultos}</tbody>
-  </table>` : ''}
-
-  <div class="assinatura">
-    <div class="assin-box">
-      <div class="assin-linha" style="width:80%"></div>
-      <div style="font-size:11px;color:#666">Responsável pela Atividade</div>
-    </div>
-    <div class="assin-box">
-      <div class="assin-linha" style="width:80%"></div>
-      <div style="font-size:11px;color:#666">Coordenação</div>
-    </div>
-  </div>
-  <div class="footer">✦ Instituto Nossa Senhora Menina · Gerado em ${new Date().toLocaleDateString('pt-BR')}</div>
-  <div style="text-align:center;margin-top:12px">
-    <button onclick="window.print()" style="padding:10px 28px;background:#1a3a6b;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:Nunito,sans-serif;font-weight:700">
-      🖨️ Imprimir Lista de Presença
-    </button>
-  </div>
-</body>
-</html>`
-
-  const win = window.open('', '_blank', 'width=960,height=750')
+// ── helpers ──────────────────────────────────────────────────
+function abrirJanela(html, titulo = 'Relatório') {
+  const win = window.open('', '_blank', 'width=1000,height=740')
   win.document.write(html)
   win.document.close()
 }
 
-export function gerarRelatorioEstoquePDF(itens) {
-  const rows = itens.map((e, i) => {
-    const status = e.qtd_atual <= 0 ? '🔴 Crítico' : e.qtd_atual <= e.qtd_minima ? '⚠️ Baixo' : '✅ OK'
-    const cor    = e.qtd_atual <= 0 ? '#fdf0ee'    : e.qtd_atual <= e.qtd_minima ? '#fef3e8'   : '#eaf5ee'
-    return `<tr style="background:${i%2===0?'#f8faff':'white'}">
-      <td>${e.produto}</td>
-      <td>${e.categoria||'—'}</td>
-      <td style="text-align:center;font-weight:700">${e.qtd_atual}</td>
-      <td style="text-align:center">${e.qtd_minima}</td>
-      <td style="text-align:center">${e.unidade||'un'}</td>
-      <td style="text-align:center;background:${cor};font-size:12px">${status}</td>
-    </tr>`
-  }).join('')
+const cabecalho = (titulo, subtitulo = '') => `
+  <div class="header">
+    <div class="inst">Instituto Nossa Senhora Menina</div>
+    <h1>${titulo}</h1>
+    ${subtitulo ? `<div class="sub">${subtitulo}</div>` : ''}
+    <div class="data">Gerado em ${new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' })}</div>
+  </div>`
+
+const rodape = () => `
+  <div class="footer">✦ Instituto Nossa Senhora Menina · Portal Administrativo</div>
+  <div style="text-align:center;margin-top:14px">
+    <button onclick="window.print()" style="padding:10px 28px;background:#1a3a6b;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px">🖨️ Imprimir</button>
+  </div>`
+
+const estiloBase = `
+  body{font-family:Arial,sans-serif;padding:28px;color:#1e2a3a;font-size:13px}
+  .header{text-align:center;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #c9a227}
+  .inst{font-size:10px;color:#888;letter-spacing:2px;text-transform:uppercase}
+  h1{font-size:20px;color:#1a3a6b;margin:4px 0}
+  .sub{font-size:13px;color:#555;margin-top:4px}
+  .data{font-size:12px;color:#888;margin-top:4px}
+  .resumo{display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+  .res{background:#f2f5fb;padding:10px 14px;border-radius:8px;font-size:13px;min-width:130px}
+  .res strong{color:#1a3a6b;font-size:20px;display:block}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:16px}
+  th{background:#1a3a6b;color:white;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.7px}
+  td{padding:8px 10px;border:1px solid #dce3f0}
+  .footer{margin-top:22px;text-align:center;font-size:11px;color:#888}
+  .badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700}
+  h2{color:#1a3a6b;font-size:16px;margin:20px 0 8px;border-bottom:1px solid #dce3f0;padding-bottom:4px}
+  @media print{button{display:none!important}}`
+
+const fmt = v => Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
+
+// ── 1. Lista de Presença ─────────────────────────────────────
+export function gerarListaPresencaPDF(atividade, participantesSelecionados = []) {
+  const criancas = participantesSelecionados.filter(p => p.tipo === 'crianca')
+  const adultos  = participantesSelecionados.filter(p => p.tipo === 'adulto')
+
+  const linhas = (lista) => lista.map((p, i) => `
+    <tr style="background:${i%2===0?'#f8faff':'white'}">
+      <td style="width:32px;text-align:center">${i+1}</td>
+      <td>${p.nome}</td>
+      <td style="width:80px"></td>
+    </tr>`).join('')
+
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Lista de Presença</title>
+  <style>
+    ${estiloBase}
+    .section-title{font-size:15px;font-weight:bold;color:#1a3a6b;margin:18px 0 8px;padding:6px 10px;background:#e8eef8;border-radius:6px}
+    .atividade-info{background:#fdf8f1;border:1px solid #e8c547;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px}
+  </style></head><body>
+  ${cabecalho('Lista de Presença', atividade.titulo)}
+  <div class="atividade-info">
+    📅 <strong>Data:</strong> ${atividade.data ? new Date(atividade.data+'T00:00:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}) : '—'} &nbsp;|&nbsp;
+    📍 <strong>Local:</strong> ${atividade.local||'—'} &nbsp;|&nbsp;
+    🎯 <strong>Tema:</strong> ${atividade.tema||'—'}
+    ${atividade.hora_inicio ? ` &nbsp;|&nbsp; ⏰ <strong>Horário:</strong> ${atividade.hora_inicio}${atividade.hora_fim?' – '+atividade.hora_fim:''}` : ''}
+  </div>
+
+  ${criancas.length > 0 ? `
+  <div class="section-title">👧 Crianças (${criancas.length})</div>
+  <table>
+    <thead><tr><th>#</th><th>Nome</th><th style="text-align:center">Assinatura / Presente</th></tr></thead>
+    <tbody>${linhas(criancas)}</tbody>
+  </table>` : ''}
+
+  ${adultos.length > 0 ? `
+  <div class="section-title">👤 Adultos (${adultos.length})</div>
+  <table>
+    <thead><tr><th>#</th><th>Nome</th><th style="text-align:center">Assinatura / Presente</th></tr></thead>
+    <tbody>${linhas(adultos)}</tbody>
+  </table>` : ''}
+
+  ${rodape()}
+  </body></html>`
+
+  abrirJanela(html, 'Lista de Presença')
+}
+
+// ── 2. Estoque ───────────────────────────────────────────────
+export function gerarRelatorioEstoquePDF(itens, ordem = 'criticidade') {
+  const statusInfo = e => e.qtd_atual <= 0
+    ? { label:'🔴 Crítico', bg:'#fdf0ee', cor:'#c0392b' }
+    : e.qtd_atual <= e.qtd_minima
+      ? { label:'⚠️ Baixo',   bg:'#fef3e8', cor:'#d4680a' }
+      : { label:'✅ OK',      bg:'#eaf5ee', cor:'#2e7d52' }
 
   const criticos = itens.filter(e => e.qtd_atual <= 0).length
   const baixos   = itens.filter(e => e.qtd_atual > 0 && e.qtd_atual <= e.qtd_minima).length
+  const ok       = itens.length - criticos - baixos
+
+  const rows = itens.map((e, i) => {
+    const s = statusInfo(e)
+    return `<tr style="background:${i%2===0?'#f8faff':'white'}">
+      <td>${e.produto}</td>
+      <td>${e.categoria||'—'}</td>
+      <td style="text-align:center;font-weight:700;color:${s.cor}">${e.qtd_atual}</td>
+      <td style="text-align:center;color:#6b7280">${e.qtd_minima}</td>
+      <td style="text-align:center;color:#6b7280">${e.unidade||'un'}</td>
+      <td style="text-align:center;background:${s.bg}"><span style="color:${s.cor};font-weight:700;font-size:11px">${s.label}</span></td>
+      ${e.observacao ? `<td style="font-size:11px;color:#6b7280">${e.observacao}</td>` : '<td style="color:#aaa">—</td>'}
+    </tr>`
+  }).join('')
+
+  const ordemLabel = ordem === 'alfabetica' ? 'Ordem Alfabética (A→Z)' : 'Ordem por Criticidade (Crítico → Baixo → OK)'
 
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório de Estoque</title>
-  <style>body{font-family:Arial,sans-serif;padding:28px;color:#1e2a3a}.header{text-align:center;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #c9a227}h1{font-size:20px;color:#1a3a6b;margin:4px 0}.resumo{display:flex;gap:14px;margin-bottom:18px;flex-wrap:wrap}.res{background:#f2f5fb;padding:10px 14px;border-radius:8px;font-size:13px;min-width:120px}.res strong{color:#1a3a6b;font-size:18px;display:block}table{width:100%;border-collapse:collapse;font-size:12.5px}th{background:#1a3a6b;color:white;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.7px}td{padding:8px 10px;border:1px solid #dce3f0}.footer{margin-top:22px;text-align:center;font-size:11px;color:#888}@media print{button{display:none!important}}</style></head>
-  <body>
-  <div class="header"><div style="font-size:10px;color:#888;letter-spacing:2px;text-transform:uppercase">Instituto Nossa Senhora Menina</div><h1>Relatório de Estoque</h1><div style="font-size:12px;color:#888;margin-top:4px">Gerado em ${new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' })}</div></div>
+  <style>${estiloBase}</style></head><body>
+  ${cabecalho('Relatório de Estoque', `Ordenação: ${ordemLabel}`)}
   <div class="resumo">
     <div class="res"><strong>${itens.length}</strong>Total de itens</div>
-    <div class="res"><strong style="color:#2e7d52">${itens.length-criticos-baixos}</strong>Itens OK</div>
+    <div class="res"><strong style="color:#2e7d52">${ok}</strong>Itens OK</div>
     <div class="res"><strong style="color:#d4680a">${baixos}</strong>Estoque Baixo</div>
     <div class="res"><strong style="color:#c0392b">${criticos}</strong>Estoque Crítico</div>
   </div>
-  <table><thead><tr><th>Produto</th><th>Categoria</th><th>Qtd Atual</th><th>Qtd Mínima</th><th>Unidade</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
-  <div class="footer">✦ Instituto Nossa Senhora Menina · Portal Administrativo</div>
-  <div style="text-align:center;margin-top:14px"><button onclick="window.print()" style="padding:10px 28px;background:#1a3a6b;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px">🖨️ Imprimir Relatório</button></div>
+  ${criticos > 0 ? `<div style="background:#fdf0ee;border:1px solid #c0392b;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#c0392b"><strong>⚠️ Atenção:</strong> ${criticos} item(s) com estoque zerado precisam de reposição urgente.</div>` : ''}
+  <table>
+    <thead><tr><th>Produto</th><th>Categoria</th><th>Qtd Atual</th><th>Qtd Mín</th><th>Unidade</th><th>Status</th><th>Observação</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  ${rodape()}
   </body></html>`
 
-  const win = window.open('', '_blank', 'width=900,height=700')
-  win.document.write(html); win.document.close()
+  abrirJanela(html, 'Relatório de Estoque')
 }
 
+// ── 3. Compras ───────────────────────────────────────────────
 export function gerarRelatorioComprasPDF(compras, titulo = 'Relatório de Compras') {
   const total = compras.reduce((s, c) => s + (Number(c.valor_total) || 0), 0)
-  const rows  = compras.map((c, i) => `
+  const porCat = {}
+  compras.forEach(c => { porCat[c.categoria||'Outros'] = (porCat[c.categoria||'Outros']||0) + Number(c.valor_total||0) })
+
+  const rows = compras.map((c, i) => `
     <tr style="background:${i%2===0?'#f8faff':'white'}">
-      <td>${c.data ? new Date(c.data+'T12:00').toLocaleDateString('pt-BR') : '—'}</td>
-      <td>${c.item}</td>
+      <td>${c.data ? new Date(c.data+'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+      <td><strong>${c.item}</strong></td>
       <td>${c.categoria||'—'}</td>
-      <td style="text-align:center">${c.quantidade}</td>
-      <td style="text-align:right">R$ ${Number(c.valor_unitario||0).toFixed(2)}</td>
-      <td style="text-align:right;font-weight:700">R$ ${Number(c.valor_total||0).toFixed(2)}</td>
       <td>${c.atividade_nome||'—'}</td>
-      <td>${c.usuario_nome||c.responsavel||'—'}</td>
+      <td style="text-align:center">${c.quantidade}</td>
+      <td style="text-align:right">${fmt(c.valor_unitario)}</td>
+      <td style="text-align:right;font-weight:700;color:#1a3a6b">${fmt(c.valor_total)}</td>
     </tr>`).join('')
 
+  const catRows = Object.entries(porCat).sort((a,b)=>b[1]-a[1]).map(([k,v]) => `
+    <tr><td>${k}</td><td style="text-align:right;font-weight:700">${fmt(v)}</td>
+    <td style="text-align:right;color:#888">${((v/total)*100).toFixed(1)}%</td></tr>`).join('')
+
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${titulo}</title>
-  <style>body{font-family:Arial,sans-serif;padding:28px;color:#1e2a3a;font-size:12px}.header{text-align:center;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #c9a227}h1{font-size:19px;color:#1a3a6b}table{width:100%;border-collapse:collapse;font-size:11.5px}th{background:#1a3a6b;color:white;padding:7px 9px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.6px}td{padding:7px 9px;border:1px solid #dce3f0}.total-row{background:#e8eef8!important;font-weight:700}.footer{margin-top:18px;text-align:center;font-size:11px;color:#888}@media print{button{display:none!important}}</style></head>
-  <body>
-  <div class="header"><div style="font-size:10px;color:#888;letter-spacing:1.5px;text-transform:uppercase">Instituto Nossa Senhora Menina</div><h1>${titulo}</h1><div style="font-size:11px;color:#888;margin-top:4px">Gerado em ${new Date().toLocaleDateString('pt-BR')} · ${compras.length} registros · Total: R$ ${total.toFixed(2)}</div></div>
-  <table><thead><tr><th>Data</th><th>Item</th><th>Categoria</th><th>Qtd</th><th>Vlr Unit</th><th>Total</th><th>Atividade</th><th>Registrado por</th></tr></thead>
-  <tbody>${rows}<tr class="total-row"><td colspan="5" style="text-align:right">TOTAL GERAL</td><td>R$ ${total.toFixed(2)}</td><td colspan="2"></td></tr></tbody></table>
-  <div class="footer">✦ Instituto Nossa Senhora Menina · Portal Administrativo</div>
-  <div style="text-align:center;margin-top:12px"><button onclick="window.print()" style="padding:10px 28px;background:#1a3a6b;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px">🖨️ Imprimir Relatório</button></div>
+  <style>${estiloBase}</style></head><body>
+  ${cabecalho(titulo)}
+  <div class="resumo">
+    <div class="res"><strong>${compras.length}</strong>Total de itens</div>
+    <div class="res"><strong style="color:#1a3a6b">${fmt(total)}</strong>Valor Total</div>
+  </div>
+  <h2>Detalhamento</h2>
+  <table>
+    <thead><tr><th>Data</th><th>Item</th><th>Categoria</th><th>Atividade</th><th>Qtd</th><th>Vl Unit</th><th>Total</th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr style="background:#1a3a6b;color:white"><td colspan="6" style="font-weight:700;padding:10px">TOTAL GERAL</td><td style="text-align:right;font-weight:800;font-size:14px;padding:10px">${fmt(total)}</td></tr></tfoot>
+  </table>
+  <h2>Por Categoria</h2>
+  <table>
+    <thead><tr><th>Categoria</th><th style="text-align:right">Total</th><th style="text-align:right">%</th></tr></thead>
+    <tbody>${catRows}</tbody>
+  </table>
+  ${rodape()}
   </body></html>`
 
-  const win = window.open('', '_blank', 'width=1000,height=700')
-  win.document.write(html); win.document.close()
+  abrirJanela(html, titulo)
 }
 
-export function formatarData(dateStr) {
-  if (!dateStr) return '—'
-  try {
-    return new Date(dateStr + 'T12:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' })
-  } catch { return dateStr }
+// ── 4. Arrecadação ───────────────────────────────────────────
+export function gerarRelatorioArrecadacaoPDF(acoes, mes = '') {
+  const totalMeta     = acoes.reduce((s, a) => s + Number(a.meta_valor||0), 0)
+  const totalArrecad  = acoes.reduce((s, a) => s + Number(a.total_arrecadado||0), 0)
+  const finalizadas   = acoes.filter(a => a.status === 'finalizada').length
+  const andamento     = acoes.filter(a => a.status === 'em_andamento').length
+
+  const rows = acoes.map((a, i) => {
+    const stMap = { planejada:'#e8eef8', em_andamento:'#fef3e8', finalizada:'#eaf5ee', cancelada:'#f4f4f4' }
+    const stLabel = { planejada:'📋 Planejada', em_andamento:'🔄 Em andamento', finalizada:'✅ Finalizada', cancelada:'⚫ Cancelada' }
+    return `<tr style="background:${i%2===0?'#f8faff':'white'}">
+      <td><strong>${a.nome}</strong>${a.detalhe ? `<br><span style="font-size:11px;color:#888">${a.detalhe}</span>` : ''}</td>
+      <td style="text-align:center">${a.data_realizacao ? new Date(a.data_realizacao+'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+      <td style="background:${stMap[a.status]||'white'};text-align:center;font-size:11px;font-weight:700">${stLabel[a.status]||a.status}</td>
+      <td style="text-align:right;color:#888">${a.meta_valor ? fmt(a.meta_valor) : '—'}</td>
+      <td style="text-align:right;font-weight:700;color:${a.total_arrecadado>0?'#2e7d52':'#888'}">${a.total_arrecadado ? fmt(a.total_arrecadado) : '—'}</td>
+      <td>${(a.responsaveis||[]).join(', ')||'—'}</td>
+    </tr>`
+  }).join('')
+
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Planejamento de Arrecadação</title>
+  <style>${estiloBase}</style></head><body>
+  ${cabecalho('Planejamento de Arrecadação', mes ? `Período: ${mes}` : '')}
+  <div class="resumo">
+    <div class="res"><strong>${acoes.length}</strong>Total de ações</div>
+    <div class="res"><strong style="color:#2e7d52">${finalizadas}</strong>Finalizadas</div>
+    <div class="res"><strong style="color:#d4680a">${andamento}</strong>Em andamento</div>
+    <div class="res"><strong style="color:#1a3a6b">${fmt(totalMeta)}</strong>Meta total</div>
+    <div class="res"><strong style="color:#2e7d52">${fmt(totalArrecad)}</strong>Arrecadado</div>
+  </div>
+  <table>
+    <thead><tr><th>Ação / Detalhe</th><th>Data</th><th>Status</th><th style="text-align:right">Meta</th><th style="text-align:right">Arrecadado</th><th>Responsáveis</th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot>
+      <tr style="background:#f2f5fb;font-weight:700">
+        <td colspan="3" style="padding:10px">TOTAIS</td>
+        <td style="text-align:right;padding:10px">${fmt(totalMeta)}</td>
+        <td style="text-align:right;padding:10px;color:#2e7d52">${fmt(totalArrecad)}</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+  ${rodape()}
+  </body></html>`
+
+  abrirJanela(html, 'Arrecadação')
 }
 
-export function abrirGoogleCalendar(atividade) {
-  const data  = atividade.data?.replace(/-/g,'') || ''
-  const ini   = data + (atividade.hora_inicio ? 'T' + atividade.hora_inicio.replace(/:/g,'') + '00' : '')
-  const fim   = data + (atividade.hora_fim    ? 'T' + atividade.hora_fim.replace(/:/g,'')    + '00' : '')
-  const det   = encodeURIComponent(`${atividade.descricao||''}\n\nCrianças: ${atividade.qtd_criancas||0} | Adultos: ${atividade.qtd_adultos||0}\nInsumos: ${atividade.insumos||'—'}`)
-  const url   = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(atividade.titulo)}&dates=${ini}/${fim}&location=${encodeURIComponent(atividade.local||'')}&details=${det}`
-  window.open(url, '_blank')
+// ── 5. Financeiro ────────────────────────────────────────────
+export function gerarRelatorioFinanceiroPDF(lancamentos, mes = '') {
+  const pagar    = lancamentos.filter(l => l.tipo === 'pagar')
+  const receber  = lancamentos.filter(l => l.tipo === 'receber')
+  const totPagar = pagar.reduce((s,l) => s+Number(l.valor||0), 0)
+  const totRec   = receber.reduce((s,l) => s+Number(l.valor||0), 0)
+  const saldo    = totRec - totPagar
+  const stLabel  = { pendente:'⏳ Pendente', pago:'✅ Pago', vencido:'🔴 Vencido', cancelado:'⚫ Cancelado' }
+  const stBg     = { pendente:'#fef3e8', pago:'#eaf5ee', vencido:'#fdf0ee', cancelado:'#f4f4f4' }
+
+  const rowsLanc = (lista) => lista.map((l,i) => `
+    <tr style="background:${i%2===0?'#f8faff':'white'}">
+      <td><strong>${l.descricao}</strong>${l.favorecido?`<br><span style="font-size:11px;color:#888">→ ${l.favorecido}</span>`:''}</td>
+      <td>${l.categoria||'—'}</td>
+      <td style="text-align:center">${l.data_vencimento?new Date(l.data_vencimento+'T00:00:00').toLocaleDateString('pt-BR'):'—'}</td>
+      <td style="text-align:center;background:${stBg[l.status]||'white'};font-size:11px;font-weight:700">${stLabel[l.status]||l.status}</td>
+      <td style="text-align:right;font-weight:700;color:${l.tipo==='receber'?'#2e7d52':'#c0392b'}">${fmt(l.valor)}</td>
+    </tr>`).join('')
+
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório Financeiro</title>
+  <style>${estiloBase}</style></head><body>
+  ${cabecalho('Relatório Financeiro', mes)}
+  <div class="resumo">
+    <div class="res"><strong style="color:#2e7d52">${fmt(totRec)}</strong>Total a Receber</div>
+    <div class="res"><strong style="color:#c0392b">${fmt(totPagar)}</strong>Total a Pagar</div>
+    <div class="res"><strong style="color:${saldo>=0?'#2e7d52':'#c0392b'}">${fmt(saldo)}</strong>Saldo do período</div>
+  </div>
+  ${receber.length>0 ? `<h2>💚 Contas a Receber (${receber.length})</h2>
+  <table><thead><tr><th>Descrição</th><th>Categoria</th><th>Vencimento</th><th>Status</th><th style="text-align:right">Valor</th></tr></thead>
+  <tbody>${rowsLanc(receber)}</tbody>
+  <tfoot><tr style="background:#eaf5ee"><td colspan="4" style="font-weight:700;padding:8px">SUBTOTAL A RECEBER</td><td style="text-align:right;font-weight:800;color:#2e7d52;padding:8px">${fmt(totRec)}</td></tr></tfoot>
+  </table>` : ''}
+  ${pagar.length>0 ? `<h2>🔴 Contas a Pagar (${pagar.length})</h2>
+  <table><thead><tr><th>Descrição</th><th>Categoria</th><th>Vencimento</th><th>Status</th><th style="text-align:right">Valor</th></tr></thead>
+  <tbody>${rowsLanc(pagar)}</tbody>
+  <tfoot><tr style="background:#fdf0ee"><td colspan="4" style="font-weight:700;padding:8px">SUBTOTAL A PAGAR</td><td style="text-align:right;font-weight:800;color:#c0392b;padding:8px">${fmt(totPagar)}</td></tr></tfoot>
+  </table>` : ''}
+  <div style="background:${saldo>=0?'#eaf5ee':'#fdf0ee'};border:2px solid ${saldo>=0?'#2e7d52':'#c0392b'};border-radius:10px;padding:16px 24px;text-align:center;margin-top:10px">
+    <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px">Resultado do Período</div>
+    <div style="font-size:28px;font-weight:900;color:${saldo>=0?'#2e7d52':'#c0392b'};margin-top:6px">${saldo>=0?'+':''}${fmt(saldo)}</div>
+  </div>
+  ${rodape()}
+  </body></html>`
+
+  abrirJanela(html, 'Relatório Financeiro')
 }

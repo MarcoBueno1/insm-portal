@@ -18,6 +18,7 @@ import Materiais from './pages/Materiais'
 import Usuarios from './pages/Usuarios'
 import Auditoria from './pages/Auditoria'
 import Financeiro from './pages/Financeiro'
+import Arrecadacao from './pages/Arrecadacao'
 import { ToastProvider } from './hooks/useToast'
 
 export const AuthContext = createContext(null)
@@ -93,6 +94,7 @@ export default function App() {
                 <Route path="materiais"      element={<Materiais />} />
                 <Route path="relatorios"     element={<Relatorios />} />
                 <Route path="financeiro"     element={<Financeiro />} />
+                <Route path="arrecadacao"   element={<Arrecadacao />} />
                 <Route path="usuarios"       element={<Usuarios />} />
                 <Route path="auditoria"      element={<Auditoria />} />
               </Route>

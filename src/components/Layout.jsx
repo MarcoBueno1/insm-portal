@@ -16,6 +16,7 @@ const NAV = [
   { to:'/estoque',       icon:'📦', label:'Estoque',           section:'Gestão' },
   { to:'/materiais',     icon:'🛒', label:'Compras',           section:'Gestão' },
   { to:'/financeiro',    icon:'💰', label:'Contas',            section:'Financeiro' },
+  { to:'/arrecadacao',   icon:'🎯', label:'Arrecadação',       section:'Financeiro' },
   { to:'/usuarios',      icon:'🔐', label:'Usuários',          section:'Admin', adminOnly:true },
   { to:'/auditoria',     icon:'🔍', label:'Auditoria',         section:'Admin', adminOnly:true },
 ]
