@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../App'
-import { formatarData } from '../lib/pdf'
+import { formatarData } from "../lib/utils";
 
 export default function Dashboard() {
   const { nomeUser } = useAuth()
