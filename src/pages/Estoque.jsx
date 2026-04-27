@@ -36,7 +36,7 @@ export default function Estoque() {
   const [filtro, setFiltro] = useState('todos')
   const [busca, setBusca] = useState('')
   
-  // NOVO: Estado para ordenação
+  // Estado para ordenação
   const [ordem, setOrdem] = useState('alfabetica') // 'alfabetica' | 'criticidade'
 
   const [form, setForm] = useState(EMPTY)
@@ -156,23 +156,34 @@ export default function Estoque() {
     toast('Item removido.'); load()
   }
 
-  // Lógica de filtragem e ordenação
+  // Lógica de filtragem e ordenação CORRIGIDA
   const filtrados = lista
     .filter(e => {
       const s = st(e.qtd_atual, e.qtd_minima)
       const mF = filtro === 'todos' || s === filtro
-      const mB = !busca || e.produto.toLowerCase().includes(busca.toLowerCase()) || (e.categoria || '').toLowerCase().includes(busca.toLowerCase())
+      const termoBusca = busca.toLowerCase().trim()
+      const mB = !termoBusca || 
+                 e.produto.toLowerCase().includes(termoBusca) || 
+                 (e.categoria || '').toLowerCase().includes(termoBusca)
       return mF && mB
     })
     .sort((a, b) => {
       if (ordem === 'alfabetica') {
-        return a.produto.localeCompare(b.produto)
+        // Ordenação alfabética robusta: ignora case e trata acentos corretamente
+        const nomeA = a.produto.trim();
+        const nomeB = b.produto.trim();
+        return nomeA.localeCompare(nomeB, 'pt-BR', { sensitivity: 'base' })
       } else {
         // Ordem por criticidade: Crítico (0) > Baixo (1) > OK (2)
         const scoreA = st(a.qtd_atual, a.qtd_minima) === 'critico' ? 0 : st(a.qtd_atual, a.qtd_minima) === 'baixo' ? 1 : 2
         const scoreB = st(b.qtd_atual, b.qtd_minima) === 'critico' ? 0 : st(b.qtd_atual, b.qtd_minima) === 'baixo' ? 1 : 2
+        
         if (scoreA !== scoreB) return scoreA - scoreB
-        return a.produto.localeCompare(b.produto) // Desempate alfabético
+        
+        // Desempate alfabético dentro da mesma categoria de status
+        const nomeA = a.produto.trim();
+        const nomeB = b.produto.trim();
+        return nomeA.localeCompare(nomeB, 'pt-BR', { sensitivity: 'base' })
       }
     })
 
@@ -191,7 +202,7 @@ export default function Estoque() {
           <p className="page-subtitle">Produtos, movimentações e auditoria completa</p>
         </div>
         <div className="page-actions">
-          {/* Atualizado para passar a ordem selecionada */}
+          {/* Passa a lista já filtrada e ordenada para o PDF */}
           <button className="btn btn-ghost btn-sm" onClick={() => gerarRelatorioEstoquePDF(filtrados, ordem)}>📄 PDF</button>
           {isCoord && <button className="btn btn-gold" onClick={abrirNovo}>+ Cadastrar Item</button>}
         </div>
@@ -233,7 +244,7 @@ export default function Estoque() {
               <span className="card-title">📋 Itens em Estoque</span>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 
-                {/* NOVO: Seletor de Ordenação */}
+                {/* Seletor de Ordenação */}
                 <div className="tabs" style={{ marginBottom: 0 }}>
                   <button className={`tab ${ordem === 'alfabetica' ? 'active' : ''}`} onClick={() => setOrdem('alfabetica')}>A-Z</button>
                   <button className={`tab ${ordem === 'criticidade' ? 'active' : ''}`} onClick={() => setOrdem('criticidade')}>Status</button>
