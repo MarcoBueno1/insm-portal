@@ -73,6 +73,18 @@ function ProtectedRoute({ children }) {
   return children
 }
 
+function AdminRoute({ children }) {
+  const { user, loading, isAdmin } = useAuth()
+  if (loading) return (
+    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div className="loading-center"><div className="spinner" /><span>Carregando...</span></div>
+    </div>
+  )
+  if (!user) return <Navigate to="/login" replace />
+  if (!isAdmin) return <Navigate to="/" replace />
+  return children
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -95,8 +107,8 @@ export default function App() {
                 <Route path="relatorios"     element={<Relatorios />} />
                 <Route path="financeiro"     element={<Financeiro />} />
                 <Route path="arrecadacao"   element={<Arrecadacao />} />
-                <Route path="usuarios"       element={<Usuarios />} />
-                <Route path="auditoria"      element={<Auditoria />} />
+                <Route path="usuarios"       element={<AdminRoute><Usuarios /></AdminRoute>} />
+                <Route path="auditoria"      element={<AdminRoute><Auditoria /></AdminRoute>} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

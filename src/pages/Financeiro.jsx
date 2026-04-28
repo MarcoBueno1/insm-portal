@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../App'
 import { useToast } from '../hooks/useToast'
@@ -23,6 +23,14 @@ const FORM_VAZIO = { tipo:'pagar', descricao:'', valor:'', categoria:'', data_ve
 const fmt = v => Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
 const hoje = () => new Date().toISOString().split('T')[0]
 
+// Formata o mês selecionado corretamente (usa filtroMes, evita problema de fuso)
+function nomeMesFmt(filtroMes) {
+  if (!filtroMes) return ''
+  const [ano, mes] = filtroMes.split('-').map(Number)
+  const d = new Date(ano, mes - 1, 15)
+  return d.toLocaleDateString('pt-BR', { month:'long', year:'numeric' })
+}
+
 export default function Financeiro() {
   const { user, nomeUser, isCoord } = useAuth()
   const toast = useToast()
@@ -32,11 +40,19 @@ export default function Financeiro() {
   const [editando, setEditando]       = useState(null)
   const [form, setForm]               = useState(FORM_VAZIO)
   const [saving, setSaving]           = useState(false)
-  const [aba, setAba]                 = useState('dashboard') // dashboard | pagar | receber | relatorio
+  const [aba, setAba]                 = useState('dashboard')
   const [filtroStatus, setFiltroStatus] = useState('todos')
   const [filtroMes, setFiltroMes]     = useState(() => {
     const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`
   })
+
+  // Upload de documento
+  const [docFile, setDocFile]         = useState(null)
+  const [docPreview, setDocPreview]   = useState(null)
+  const [uploadingDoc, setUploadingDoc] = useState(false)
+  const [modalDocOpen, setModalDocOpen] = useState(false)
+  const [lancamentoDoc, setLancamentoDoc] = useState(null)
+  const fileRef = useRef()
 
   useEffect(() => { load() }, [])
 
@@ -50,6 +66,8 @@ export default function Financeiro() {
   function abrirNovo(tipo='pagar') {
     setEditando(null)
     setForm({ ...FORM_VAZIO, tipo })
+    setDocFile(null)
+    setDocPreview(null)
     setModalOpen(true)
   }
 
@@ -58,7 +76,33 @@ export default function Financeiro() {
     setForm({ tipo:l.tipo, descricao:l.descricao, valor:l.valor, categoria:l.categoria||'',
       data_vencimento:l.data_vencimento||'', data_pagamento:l.data_pagamento||'',
       status:l.status, observacao:l.observacao||'', favorecido:l.favorecido||'' })
+    setDocFile(null)
+    setDocPreview(null)
     setModalOpen(true)
+  }
+
+  function handleDocFileChange(e) {
+    const f = e.target.files[0]
+    if (!f) return
+    setDocFile(f)
+    if (f.type.startsWith('image/')) {
+      const url = URL.createObjectURL(f)
+      setDocPreview({ type:'image', url })
+    } else if (f.type === 'application/pdf') {
+      setDocPreview({ type:'pdf', name: f.name })
+    } else {
+      setDocPreview({ type:'other', name: f.name })
+    }
+  }
+
+  async function uploadDocumento(lancamentoId) {
+    if (!docFile) return null
+    const ext = docFile.name.split('.').pop()
+    const path = `financeiro/${lancamentoId}/${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from('atividades').upload(path, docFile, { upsert:true })
+    if (error) { toast('Erro no upload: '+error.message, 'error'); return null }
+    const { data } = supabase.storage.from('atividades').getPublicUrl(path)
+    return data.publicUrl
   }
 
   async function salvar() {
@@ -74,7 +118,16 @@ export default function Financeiro() {
       criado_por:user.id, criado_por_nome:nomeUser }
 
     if (editando) {
-      const { error } = await supabase.from('financeiro').update({ ...payload, atualizado_em:new Date().toISOString() }).eq('id', editando.id)
+      let docUrl = editando.documento_url || null
+      if (docFile) {
+        setUploadingDoc(true)
+        const url = await uploadDocumento(editando.id)
+        if (url) docUrl = url
+        setUploadingDoc(false)
+      }
+      const { error } = await supabase.from('financeiro').update({
+        ...payload, documento_url: docUrl, atualizado_em:new Date().toISOString()
+      }).eq('id', editando.id)
       if (error) { toast('Erro: '+error.message,'error'); setSaving(false); return }
       await registrarAuditoria({ tabela:'financeiro', registro_id:editando.id, acao:'editar',
         descricao:'Lançamento "'+form.descricao+'" editado',
@@ -85,6 +138,12 @@ export default function Financeiro() {
     } else {
       const { data, error } = await supabase.from('financeiro').insert(payload).select().single()
       if (error) { toast('Erro: '+error.message,'error'); setSaving(false); return }
+      if (docFile && data?.id) {
+        setUploadingDoc(true)
+        const url = await uploadDocumento(data.id)
+        if (url) await supabase.from('financeiro').update({ documento_url: url }).eq('id', data.id)
+        setUploadingDoc(false)
+      }
       await registrarAuditoria({ tabela:'financeiro', registro_id:data?.id, acao:'criar',
         descricao:'Lançamento "'+form.descricao+'" criado ('+form.tipo+')',
         valor_novo:payload, usuario_id:user.id, usuario_nome:nomeUser })
@@ -95,6 +154,12 @@ export default function Financeiro() {
 
   async function remover(l) {
     if (!confirm('Excluir este lançamento?')) return
+    if (l.documento_url) {
+      try {
+        const path = l.documento_url.split('/atividades/')[1]
+        if (path) await supabase.storage.from('atividades').remove([path])
+      } catch {}
+    }
     await supabase.from('financeiro').delete().eq('id',l.id)
     await registrarAuditoria({ tabela:'financeiro', registro_id:l.id, acao:'remover',
       descricao:'Lançamento "'+l.descricao+'" removido',
@@ -111,6 +176,11 @@ export default function Financeiro() {
     load()
   }
 
+  function abrirVisualizarDoc(l) {
+    setLancamentoDoc(l)
+    setModalDocOpen(true)
+  }
+
   // ── Métricas do mês ─────────────────────────────────────────
   const metricas = useMemo(() => {
     const [ano,mes] = filtroMes.split('-').map(Number)
@@ -125,12 +195,8 @@ export default function Financeiro() {
     const pago    = doMes.filter(l=>l.tipo==='pagar'&&l.status==='pago').reduce((s,l)=>s+Number(l.valor||0),0)
     const vencidos= lancamentos.filter(l=>l.status!=='pago'&&l.status!=='cancelado'&&l.data_vencimento&&new Date(l.data_vencimento+'T23:59:59')<new Date())
     const saldo   = totRec - totPag
-
-    // despesas por categoria
     const porCat = {}
     doMes.filter(l=>l.tipo==='pagar').forEach(l => { const c=l.categoria||'Outros'; porCat[c]=(porCat[c]||0)+Number(l.valor||0) })
-
-    // evolução 6 meses
     const ultimos6 = []
     for (let i=5;i>=0;i--) {
       const d=new Date(); d.setMonth(d.getMonth()-i)
@@ -149,13 +215,14 @@ export default function Financeiro() {
     return { totRec,totPag,recebido,pago,vencidos,saldo,porCat,ultimos6,doMes }
   }, [lancamentos,filtroMes])
 
-  // ── Listas filtradas ─────────────────────────────────────────
   const listaPagar   = lancamentos.filter(l => l.tipo==='pagar'   && (filtroStatus==='todos'||l.status===filtroStatus))
   const listaReceber = lancamentos.filter(l => l.tipo==='receber' && (filtroStatus==='todos'||l.status===filtroStatus))
-
   const maxBar = Math.max(...metricas.ultimos6.map(m=>Math.max(m.rec,m.pag)),1)
   const catEntradas = Object.entries(metricas.porCat).sort((a,b)=>b[1]-a[1])
   const maxCat = catEntradas[0]?.[1]||1
+
+  // CORRIGIDO: nomeMes usa filtroMes, não new Date()
+  const nomeMes = nomeMesFmt(filtroMes)
 
   // ── Tabela de lançamentos ────────────────────────────────────
   const TabelaLanc = ({ lista, tipo }) => {
@@ -178,6 +245,7 @@ export default function Financeiro() {
               <th style={{ padding:'10px 14px', textAlign:'right', fontSize:12, fontWeight:700 }}>Valor</th>
               <th style={{ padding:'10px 14px', textAlign:'center', fontSize:12, fontWeight:700 }}>Vencimento</th>
               <th style={{ padding:'10px 14px', textAlign:'center', fontSize:12, fontWeight:700 }}>Status</th>
+              {tipo==='pagar' && <th style={{ padding:'10px 14px', textAlign:'center', fontSize:12, fontWeight:700 }}>📎</th>}
               {isCoord && <th style={{ padding:'10px 14px', textAlign:'center', fontSize:12, fontWeight:700 }}>Ações</th>}
             </tr>
           </thead>
@@ -201,10 +269,20 @@ export default function Financeiro() {
                   <td style={{ padding:'10px 14px', textAlign:'center' }}>
                     <span style={{ background:stat.bg, color:stat.cor, padding:'3px 9px', borderRadius:20, fontSize:11, fontWeight:800 }}>{stat.label}</span>
                   </td>
+                  {tipo==='pagar' && (
+                    <td style={{ padding:'10px 14px', textAlign:'center' }}>
+                      {l.documento_url ? (
+                        <button className="btn btn-sm btn-ghost" title="Visualizar documento"
+                          onClick={()=>abrirVisualizarDoc(l)} style={{ padding:'4px 8px', fontSize:14 }}>📎</button>
+                      ) : (
+                        <span style={{ fontSize:11, color:'var(--cinza)' }}>—</span>
+                      )}
+                    </td>
+                  )}
                   {isCoord && (
                     <td style={{ padding:'10px 14px', textAlign:'center' }}>
                       <div style={{ display:'flex', gap:5, justifyContent:'center' }}>
-                        <button className="btn btn-sm btn-success" title={l.status==='pago'?'Desfazer pagamento':'Marcar como pago'}
+                        <button className="btn btn-sm btn-success" title={l.status==='pago'?'Desfazer':'Marcar pago'}
                           onClick={()=>marcarPago(l)} style={{ padding:'4px 8px', fontSize:12 }}>
                           {l.status==='pago'?'↩️':'✅'}
                         </button>
@@ -223,7 +301,7 @@ export default function Financeiro() {
                 TOTAL ({lista.length} lançamentos)
               </td>
               <td style={{ padding:'10px 14px', textAlign:'right', fontWeight:800, fontSize:15, color:t?.cor }}>{fmt(totalLista)}</td>
-              <td colSpan={isCoord?3:2} />
+              <td colSpan={tipo==='pagar' ? (isCoord?4:3) : (isCoord?3:2)} />
             </tr>
           </tfoot>
         </table>
@@ -231,23 +309,28 @@ export default function Financeiro() {
     )
   }
 
-  const nomeMes = new Date(filtroMes+'-01').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})
-
   return (
     <div className="animate-in">
+      {/* ── Cabeçalho com seletor de mês sempre visível ── */}
       <div className="page-header">
         <div>
           <h1 className="page-title">💰 Financeiro</h1>
           <p className="page-subtitle">Controle completo de contas a pagar e a receber</p>
         </div>
-        <div className="page-actions">
+        <div className="page-actions" style={{ alignItems:'center', gap:10 }}>
+          {/* Seletor de mês SEMPRE visível */}
+          <div style={{ display:'flex', alignItems:'center', gap:8, background:'var(--creme)', border:'1.5px solid var(--azul)', borderRadius:9, padding:'5px 12px' }}>
+            <span style={{ fontSize:13, fontWeight:700, color:'var(--azul)' }}>📅</span>
+            <input type="month" style={{ border:'none', background:'transparent', padding:0, fontSize:13, fontWeight:700, color:'var(--azul)', outline:'none', cursor:'pointer' }}
+              value={filtroMes} onChange={e=>setFiltroMes(e.target.value)} />
+          </div>
           <button className="btn btn-ghost btn-sm" onClick={() => gerarRelatorioFinanceiroPDF(
             lancamentos.filter(l=>{
               if(!l.data_vencimento)return false
               const [a,m]=filtroMes.split('-').map(Number)
               const d=new Date(l.data_vencimento+'T00:00:00')
               return d.getFullYear()===a&&d.getMonth()+1===m
-            }), nomeMes)}>📄 PDF do mês</button>
+            }), nomeMes)}>📄 PDF — {nomeMes}</button>
           {isCoord && (
             <>
               <button className="btn btn-danger btn-sm" onClick={()=>abrirNovo('pagar')}>+ A Pagar</button>
@@ -267,10 +350,10 @@ export default function Financeiro() {
       {/* ═════════ DASHBOARD ═════════ */}
       {aba==='dashboard' && (
         <>
-          <div style={{ display:'flex', gap:12, alignItems:'center', marginBottom:20 }}>
-            <label style={{ fontWeight:700, color:'var(--azul)', fontSize:13 }}>📅 Mês:</label>
-            <input type="month" className="form-input" style={{ width:'auto' }}
-              value={filtroMes} onChange={e=>setFiltroMes(e.target.value)} />
+          {/* Banner do mês selecionado */}
+          <div style={{ background:'var(--azul-suave)', border:'1px solid var(--borda)', borderRadius:10, padding:'10px 16px', marginBottom:20, display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ fontSize:13, color:'var(--azul)', fontWeight:600 }}>Dados de:</span>
+            <span style={{ fontSize:14, fontWeight:800, color:'var(--azul)', textTransform:'capitalize' }}>{nomeMes}</span>
           </div>
 
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(190px,1fr))', gap:14, marginBottom:24 }}>
@@ -293,7 +376,6 @@ export default function Financeiro() {
           </div>
 
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18, marginBottom:24 }}>
-            {/* Evolução */}
             <div className="card" style={{ padding:'20px 24px' }}>
               <h3 style={{ fontFamily:'var(--font-display)', color:'var(--azul)', marginBottom:16, fontSize:15 }}>📈 Evolução — últimos 6 meses</h3>
               <div style={{ display:'flex', alignItems:'flex-end', gap:8, height:160 }}>
@@ -312,8 +394,6 @@ export default function Financeiro() {
                 <span style={{ fontSize:11, display:'flex', alignItems:'center', gap:5 }}><span style={{ width:10,height:10,background:'var(--vermelho)',borderRadius:2,display:'inline-block'}}/>Pagar</span>
               </div>
             </div>
-
-            {/* Despesas por categoria */}
             <div className="card" style={{ padding:'20px 24px' }}>
               <h3 style={{ fontFamily:'var(--font-display)', color:'var(--azul)', marginBottom:16, fontSize:15 }}>🏷️ Despesas por categoria</h3>
               {catEntradas.length===0 ? <p style={{ color:'var(--cinza)', fontSize:13 }}>Nenhuma despesa no mês.</p> : (
@@ -334,7 +414,6 @@ export default function Financeiro() {
             </div>
           </div>
 
-          {/* Vencidos */}
           {metricas.vencidos.length>0 && (
             <div className="card" style={{ padding:'16px 20px', border:'1.5px solid var(--laranja)', background:'var(--laran-bg)', marginBottom:20 }}>
               <h3 style={{ color:'var(--laranja)', marginBottom:12, fontSize:15 }}>⚠️ Lançamentos vencidos ({metricas.vencidos.length})</h3>
@@ -392,15 +471,17 @@ export default function Financeiro() {
       {/* ═════════ RELATÓRIO ═════════ */}
       {aba==='relatorio' && (
         <>
-          <div style={{ display:'flex', gap:12, alignItems:'center', marginBottom:20 }}>
-            <label style={{ fontWeight:700, color:'var(--azul)', fontSize:13 }}>📅 Mês:</label>
-            <input type="month" className="form-input" style={{ width:'auto' }}
-              value={filtroMes} onChange={e=>setFiltroMes(e.target.value)} />
-            <button className="btn btn-ghost btn-sm" onClick={() => gerarRelatorioFinanceiroPDF(metricas.doMes, nomeMes)}>📄 Exportar PDF</button>
+          <div style={{ background:'var(--azul-suave)', border:'1px solid var(--borda)', borderRadius:10, padding:'12px 18px', marginBottom:20, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12 }}>
+            <div>
+              <span style={{ fontSize:13, color:'var(--azul)', fontWeight:700 }}>Relatório do mês: </span>
+              <span style={{ fontSize:15, fontWeight:800, color:'var(--azul)', textTransform:'capitalize' }}>{nomeMes}</span>
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={() => gerarRelatorioFinanceiroPDF(metricas.doMes, nomeMes)}>
+              📄 Exportar PDF — {nomeMes}
+            </button>
           </div>
 
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, marginBottom:24 }}>
-            {/* A Pagar */}
             <div className="card" style={{ padding:'20px 24px' }}>
               <h3 style={{ fontFamily:'var(--font-display)', color:'var(--vermelho)', marginBottom:14, fontSize:16 }}>
                 🔴 A Pagar — {nomeMes}
@@ -412,7 +493,9 @@ export default function Financeiro() {
                     return (
                       <div key={l.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 12px', background:'var(--vermelho-bg)', borderRadius:8, marginBottom:6, gap:8 }}>
                         <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontWeight:700, fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{l.descricao}</div>
+                          <div style={{ fontWeight:700, fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                            {l.descricao}{l.documento_url && <span style={{ marginLeft:5, fontSize:11 }} title="Tem documento">📎</span>}
+                          </div>
                           <div style={{ fontSize:10, color:'var(--cinza)' }}>{l.categoria} · {l.data_vencimento?new Date(l.data_vencimento+'T00:00:00').toLocaleDateString('pt-BR'):''}</div>
                         </div>
                         <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
@@ -424,8 +507,7 @@ export default function Financeiro() {
                   })
               }
               <div style={{ borderTop:'2px solid var(--vermelho)', marginTop:12, paddingTop:10, display:'flex', justifyContent:'space-between', fontWeight:800 }}>
-                <span>Total a Pagar</span>
-                <span style={{ color:'var(--vermelho)', fontSize:16 }}>{fmt(metricas.totPag)}</span>
+                <span>Total a Pagar</span><span style={{ color:'var(--vermelho)', fontSize:16 }}>{fmt(metricas.totPag)}</span>
               </div>
               <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginTop:4, color:'var(--verde)' }}>
                 <span>Já pago</span><span>{fmt(metricas.pago)}</span>
@@ -435,7 +517,6 @@ export default function Financeiro() {
               </div>
             </div>
 
-            {/* A Receber */}
             <div className="card" style={{ padding:'20px 24px' }}>
               <h3 style={{ fontFamily:'var(--font-display)', color:'var(--verde)', marginBottom:14, fontSize:16 }}>
                 💚 A Receber — {nomeMes}
@@ -459,8 +540,7 @@ export default function Financeiro() {
                   })
               }
               <div style={{ borderTop:'2px solid var(--verde)', marginTop:12, paddingTop:10, display:'flex', justifyContent:'space-between', fontWeight:800 }}>
-                <span>Total a Receber</span>
-                <span style={{ color:'var(--verde)', fontSize:16 }}>{fmt(metricas.totRec)}</span>
+                <span>Total a Receber</span><span style={{ color:'var(--verde)', fontSize:16 }}>{fmt(metricas.totRec)}</span>
               </div>
               <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginTop:4, color:'var(--verde)' }}>
                 <span>Já recebido</span><span>{fmt(metricas.recebido)}</span>
@@ -471,9 +551,8 @@ export default function Financeiro() {
             </div>
           </div>
 
-          {/* Resultado */}
           <div className="card" style={{ padding:'20px 28px', background:metricas.saldo>=0?'var(--verde-bg)':'var(--vermelho-bg)', border:'2px solid '+(metricas.saldo>=0?'var(--verde)':'var(--vermelho)'), textAlign:'center' }}>
-            <div style={{ fontSize:13, fontWeight:700, color:'var(--cinza-medio)', marginBottom:6, textTransform:'uppercase', letterSpacing:1 }}>Resultado do mês</div>
+            <div style={{ fontSize:13, fontWeight:700, color:'var(--cinza-medio)', marginBottom:6, textTransform:'uppercase', letterSpacing:1 }}>Resultado de {nomeMes}</div>
             <div style={{ fontSize:36, fontWeight:900, color:metricas.saldo>=0?'var(--verde)':'var(--vermelho)', fontFamily:'var(--font-display)' }}>
               {metricas.saldo>=0?'+':''}{fmt(metricas.saldo)}
             </div>
@@ -484,13 +563,13 @@ export default function Financeiro() {
         </>
       )}
 
-      {/* Modal */}
+      {/* ══ Modal de lançamento ══ */}
       <Modal open={modalOpen} onClose={()=>setModalOpen(false)}
         title={editando ? '✏️ Editar Lançamento' : (form.tipo==='pagar'?'🔴 Nova Conta a Pagar':'💚 Nova Conta a Receber')}
         footer={<>
           <button className="btn btn-ghost" onClick={()=>setModalOpen(false)}>Cancelar</button>
-          <button className={form.tipo==='pagar'?'btn btn-danger':'btn btn-success'} onClick={salvar} disabled={saving}>
-            {saving?'⏳ Salvando...':editando?'Salvar':'Criar'}
+          <button className={form.tipo==='pagar'?'btn btn-danger':'btn btn-success'} onClick={salvar} disabled={saving||uploadingDoc}>
+            {saving||uploadingDoc ? '⏳ Salvando...' : editando?'Salvar':'Criar'}
           </button>
         </>}>
         <div className="form-row form-row-2">
@@ -546,6 +625,87 @@ export default function Financeiro() {
           <textarea className="form-textarea" rows="2" placeholder="Observações..."
             value={form.observacao} onChange={e=>setForm(f=>({...f,observacao:e.target.value}))} />
         </div>
+
+        {/* Upload de documento — apenas para contas a pagar */}
+        {form.tipo === 'pagar' && (
+          <div className="form-group">
+            <label className="form-label">📎 Documento (boleto PDF ou imagem)</label>
+            {editando?.documento_url && !docFile && (
+              <div style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px', background:'var(--verde-bg)', border:'1px solid var(--verde)', borderRadius:8, marginBottom:8 }}>
+                <span style={{ fontSize:13 }}>📄</span>
+                <span style={{ fontSize:12, fontWeight:600, color:'var(--verde)', flex:1 }}>Documento já anexado</span>
+                <a href={editando.documento_url} target="_blank" rel="noreferrer"
+                  style={{ fontSize:12, color:'var(--azul)', fontWeight:700, textDecoration:'none' }}>👁 Ver</a>
+                <button type="button" style={{ fontSize:11, color:'var(--vermelho)', background:'none', border:'none', cursor:'pointer', fontWeight:700 }}
+                  onClick={async () => {
+                    if (!confirm('Remover documento?')) return
+                    try { const p = editando.documento_url.split('/atividades/')[1]; if(p) await supabase.storage.from('atividades').remove([p]) } catch {}
+                    await supabase.from('financeiro').update({ documento_url: null }).eq('id', editando.id)
+                    setEditando(prev => ({ ...prev, documento_url: null }))
+                    toast('Documento removido.'); load()
+                  }}>🗑 Remover</button>
+              </div>
+            )}
+            {docPreview && (
+              <div style={{ marginBottom:8, padding:'10px 12px', background:'var(--creme)', border:'1px solid var(--borda)', borderRadius:8 }}>
+                {docPreview.type === 'image'
+                  ? <img src={docPreview.url} alt="preview" style={{ maxHeight:160, borderRadius:6, display:'block', margin:'0 auto' }} />
+                  : <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <span style={{ fontSize:24 }}>{docPreview.type==='pdf'?'📄':'📎'}</span>
+                      <span style={{ fontSize:12, fontWeight:600 }}>{docPreview.name}</span>
+                    </div>
+                }
+                <button type="button" style={{ marginTop:6, fontSize:11, color:'var(--vermelho)', background:'none', border:'none', cursor:'pointer', fontWeight:700 }}
+                  onClick={()=>{ setDocFile(null); setDocPreview(null); if(fileRef.current) fileRef.current.value='' }}>
+                  ✕ Remover seleção
+                </button>
+              </div>
+            )}
+            <input ref={fileRef} type="file" accept="application/pdf,image/*" style={{ display:'none' }} onChange={handleDocFileChange} />
+            <button type="button" className="btn btn-ghost btn-sm" style={{ width:'100%', borderStyle:'dashed' }}
+              onClick={()=>fileRef.current?.click()}>
+              {docFile ? '📎 Trocar arquivo' : '📎 Selecionar boleto ou imagem'}
+            </button>
+            <div style={{ fontSize:11, color:'var(--cinza)', marginTop:4 }}>Aceita PDF (boletos) e imagens. Máx. 10MB.</div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ══ Modal visualizar/imprimir documento ══ */}
+      <Modal open={modalDocOpen} onClose={()=>setModalDocOpen(false)}
+        title={`📎 Documento — ${lancamentoDoc?.descricao||''}`}
+        footer={<>
+          <button className="btn btn-ghost" onClick={()=>setModalDocOpen(false)}>Fechar</button>
+          {lancamentoDoc?.documento_url && <>
+            <a href={lancamentoDoc.documento_url} target="_blank" rel="noreferrer"
+              className="btn btn-ghost" style={{ textDecoration:'none' }}>🔗 Nova aba</a>
+            <button className="btn btn-primary" onClick={()=>{
+              const url = lancamentoDoc.documento_url
+              const isPdf = url.toLowerCase().includes('.pdf')
+              if (isPdf) {
+                // Para PDF, abre e imprime diretamente
+                const win = window.open(url, '_blank')
+                win?.addEventListener('load', () => setTimeout(() => win.print(), 500))
+              } else {
+                // Para imagem, cria janela de impressão
+                const win = window.open('', '_blank')
+                win.document.write(`<!DOCTYPE html><html><head><title>Imprimir</title><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh}img{max-width:100%;max-height:100vh}@media print{button{display:none}}</style></head><body><img src="${url}" onload="window.print()"/></body></html>`)
+                win.document.close()
+              }
+            }}>🖨️ Imprimir</button>
+          </>}
+        </>}>
+        {lancamentoDoc?.documento_url ? (
+          (() => {
+            const url = lancamentoDoc.documento_url
+            const isImg = /\.(jpg|jpeg|png|gif|webp)/i.test(url)
+            if (isImg) return <img src={url} alt="Documento" style={{ maxWidth:'100%', maxHeight:500, display:'block', margin:'0 auto', borderRadius:8 }} />
+            // PDF ou qualquer outro — tenta renderizar via iframe
+            return <iframe src={url} style={{ width:'100%', height:520, border:'none', borderRadius:8 }} title="Documento" />
+          })()
+        ) : (
+          <div style={{ textAlign:'center', padding:40, color:'var(--cinza)' }}>Nenhum documento anexado.</div>
+        )}
       </Modal>
     </div>
   )
