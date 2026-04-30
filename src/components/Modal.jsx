@@ -56,12 +56,15 @@ export default function Modal({ open, onClose, title, children, footer, size = '
           borderRadius: 18,
           width: '100%',
           maxWidth: size === 'lg' ? 680 : 540,
+          maxHeight: 'calc(100vh - 80px)',
           boxShadow: '0 20px 70px rgba(0,0,0,0.28)',
           animation: 'modalIn .25s ease',
           marginTop: 'auto',
           marginBottom: 'auto',
           flexShrink: 0,
           position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
         }}
         onClick={e => e.stopPropagation()}
       >
@@ -74,9 +77,7 @@ export default function Modal({ open, onClose, title, children, footer, size = '
           justifyContent: 'space-between',
           background: 'linear-gradient(135deg, var(--creme), white)',
           borderRadius: '18px 18px 0 0',
-          position: 'sticky',
-          top: 0,
-          zIndex: 1,
+          flexShrink: 0,
         }}>
           <h3 style={{ fontFamily:'var(--font-display)', fontSize:19, color:'var(--azul)', fontWeight:700, margin:0 }}>{title}</h3>
           <button
@@ -85,8 +86,8 @@ export default function Modal({ open, onClose, title, children, footer, size = '
           >✕</button>
         </div>
 
-        {/* Body */}
-        <div style={{ padding: '22px' }}>
+        {/* Body — rola aqui dentro */}
+        <div style={{ padding: '22px', overflowY: 'auto', flex: 1 }}>
           {children}
         </div>
 
@@ -100,9 +101,7 @@ export default function Modal({ open, onClose, title, children, footer, size = '
             gap: 8,
             background: 'var(--creme)',
             borderRadius: '0 0 18px 18px',
-            position: 'sticky',
-            bottom: 0,
-            zIndex: 1,
+            flexShrink: 0,
           }}>
             {footer}
           </div>
