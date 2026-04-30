@@ -4,6 +4,7 @@ import { useAuth } from '../App'
 import { useToast } from '../hooks/useToast'
 import Modal from '../components/Modal'
 import SelectCadastravel from '../components/SelectCadastravel'
+import RoteiroModal from '../components/RoteiroModal'
 import { abrirGoogleCalendar, formatarData } from "../lib/utils";
 
 // Gera lista de presença com nomes dos participantes cadastrados
@@ -135,6 +136,8 @@ export default function Atividades() {
   // Para lista de presença
   const [participantesSelecionados, setParticipantesSelecionados] = useState([])
   const [buscaParticipante, setBuscaParticipante] = useState('')
+  // Para roteiro
+  const [roteiroAtividade, setRoteiroAtividade] = useState(null)
 
   useEffect(() => { load() }, [])
 
@@ -308,10 +311,11 @@ export default function Atividades() {
                       )}
                       <div style={{ display:'flex', gap:7, flexWrap:'wrap' }}>
                         <button className="btn btn-sm btn-primary" onClick={() => { setModalPresenca(a); setParticipantesSelecionados([]); setBuscaParticipante('') }}>🖨️ Lista de Presença</button>
+                        <button className="btn btn-sm btn-outline" onClick={() => setRoteiroAtividade(a)}>📋 Roteiro</button>
                         <button className="btn btn-sm btn-ghost" onClick={() => abrirGoogleCalendar(a)}>📅 Google Agenda</button>
                         {a.status === 'planejada' && isCoord && <button className="btn btn-sm btn-success" onClick={() => mudarStatus(a.id, 'realizada')}>✅ Marcar Realizada</button>}
                         {a.status === 'planejada' && isCoord && <button className="btn btn-sm btn-ghost" style={{ color:'var(--vermelho)' }} onClick={() => mudarStatus(a.id, 'cancelada')}>❌ Cancelar</button>}
-                        {isCoord && <><button className="btn btn-sm btn-outline" onClick={() => abrirEditar(a)}>✏️ Editar</button><button className="btn btn-sm btn-danger" onClick={() => remover(a.id)}>🗑</button></>}
+                        {isCoord && <><button className="btn btn-sm btn-ghost" style={{ color:'var(--azul)' }} onClick={() => abrirEditar(a)}>✏️ Editar</button><button className="btn btn-sm btn-danger" onClick={() => remover(a.id)}>🗑</button></>}
                       </div>
                     </div>
                   </div>
@@ -381,6 +385,14 @@ export default function Atividades() {
           </>
         )}
       </Modal>
+
+      {/* ── Modal Roteiro ── */}
+      {roteiroAtividade && (
+        <RoteiroModal
+          atividade={roteiroAtividade}
+          onClose={() => setRoteiroAtividade(null)}
+        />
+      )}
 
       {/* ── Modal Lista de Presença ── */}
       <Modal open={!!modalPresenca} onClose={() => setModalPresenca(null)} title="🖨️ Lista de Presença" size="lg"
