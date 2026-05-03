@@ -17,6 +17,12 @@ const NAV = [
   { to:'/materiais',     icon:'🛒', label:'Compras',           section:'Gestão' },
   { to:'/financeiro',    icon:'💰', label:'Contas',            section:'Financeiro' },
   { to:'/arrecadacao',   icon:'🎯', label:'Arrecadação',       section:'Financeiro' },
+  // ── LOJA (novas entradas) ──────────────────────────────
+  { to:'/loja/pedidos',  icon:'🧾', label:'Comandas',          section:'Loja' },
+  { to:'/loja/estoque',  icon:'🏪', label:'Estoque da Loja',   section:'Loja' },
+  { to:'/loja/clientes', icon:'👥', label:'Clientes',          section:'Loja' },
+  { to:'/loja/vendas',   icon:'💳', label:'Vendas',            section:'Loja' },
+  // ──────────────────────────────────────────────────────
   { to:'/usuarios',      icon:'🔐', label:'Usuários',          section:'Admin', adminOnly:true },
   { to:'/auditoria',     icon:'🔍', label:'Auditoria',         section:'Admin', adminOnly:true },
 ]
@@ -79,13 +85,12 @@ export default function Layout() {
           </div>
         </div>
 
-        {/* Nav — rolagem interna com scrollbar visível */}
+        {/* Nav */}
         <nav style={{
           flex:1,
           padding:'10px 8px',
           overflowY:'auto',
           overflowX:'hidden',
-          /* scrollbar visível para indicar que há mais itens */
           scrollbarWidth: 'thin',
           scrollbarColor: 'rgba(201,162,39,.4) rgba(255,255,255,.05)',
         }}>
@@ -118,7 +123,7 @@ export default function Layout() {
           ))}
         </nav>
 
-        {/* Usuário + Logout — sempre visível no rodapé */}
+        {/* Usuário + Logout */}
         <div style={{ padding:'12px 12px', borderTop:'1px solid rgba(255,255,255,.1)', flexShrink:0, background:'rgba(0,0,0,.15)' }}>
           <div style={{ display:'flex', alignItems:'center', gap:9, marginBottom:10 }}>
             <div style={{ width:32, height:32, background:'linear-gradient(135deg,var(--dourado),var(--dourado-cl))', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800, fontSize:11, color:'var(--azul)', flexShrink:0 }}>
@@ -129,7 +134,6 @@ export default function Layout() {
               <div style={{ fontSize:10, color:'rgba(255,255,255,.45)', textTransform:'capitalize' }}>{perfil?.perfil || 'leitura'}</div>
             </div>
           </div>
-          {/* Botão de logout SEMPRE VISÍVEL */}
           <button
             onClick={handleLogout}
             style={{
@@ -173,7 +177,6 @@ export default function Layout() {
             </span>
           </div>
 
-          {/* Usuário na topbar com dropdown de logout */}
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
             <span style={{ background:'var(--azul)', color:'white', fontSize:10, fontWeight:800, padding:'3px 9px', borderRadius:20 }}>✦ 2026</span>
 
@@ -221,7 +224,7 @@ export default function Layout() {
           </div>
         </header>
 
-        {/* Conteúdo — rola normalmente */}
+        {/* Conteúdo */}
         <main style={{ flex:1, padding:'22px 18px', width:'100%', maxWidth:1400, margin:'0 auto', boxSizing:'border-box' }}>
           <Outlet />
         </main>

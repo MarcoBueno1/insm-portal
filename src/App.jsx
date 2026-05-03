@@ -21,6 +21,13 @@ import Financeiro from './pages/Financeiro'
 import Arrecadacao from './pages/Arrecadacao'
 import { ToastProvider } from './hooks/useToast'
 
+// ── NOVAS IMPORTAÇÕES DA LOJA ──────────────────────────────
+import LojaPedidos  from './pages/LojaPedidos'
+import LojaEstoque  from './pages/LojaEstoque'
+import LojaClientes from './pages/LojaClientes'
+import LojaVendas   from './pages/LojaVendas'
+// ──────────────────────────────────────────────────────────
+
 export const AuthContext = createContext(null)
 export const useAuth = () => useContext(AuthContext)
 
@@ -106,9 +113,16 @@ export default function App() {
                 <Route path="materiais"      element={<Materiais />} />
                 <Route path="relatorios"     element={<Relatorios />} />
                 <Route path="financeiro"     element={<Financeiro />} />
-                <Route path="arrecadacao"   element={<Arrecadacao />} />
+                <Route path="arrecadacao"    element={<Arrecadacao />} />
                 <Route path="usuarios"       element={<AdminRoute><Usuarios /></AdminRoute>} />
                 <Route path="auditoria"      element={<AdminRoute><Auditoria /></AdminRoute>} />
+
+                {/* ── ROTAS DA LOJA (novas) ── */}
+                <Route path="loja/pedidos"   element={<LojaPedidos />} />
+                <Route path="loja/estoque"   element={<LojaEstoque />} />
+                <Route path="loja/clientes"  element={<LojaClientes />} />
+                <Route path="loja/vendas"    element={<LojaVendas />} />
+                {/* ────────────────────────── */}
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
