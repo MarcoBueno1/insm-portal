@@ -5,6 +5,7 @@ import { useToast } from '../hooks/useToast'
 import Modal from '../components/Modal'
 import SelectCadastravel from '../components/SelectCadastravel'
 import RoteiroModal from '../components/RoteiroModal'
+import AtividadesCalendario from '../components/AtividadesCalendario'
 import { abrirGoogleCalendar, formatarData } from "../lib/utils";
 
 // Gera lista de presença com nomes dos participantes cadastrados
@@ -138,6 +139,8 @@ export default function Atividades() {
   const [buscaParticipante, setBuscaParticipante] = useState('')
   // Para roteiro
   const [roteiroAtividade, setRoteiroAtividade] = useState(null)
+  // Vista calendário
+  const [vista, setVista] = useState('lista') // 'lista' | 'calendario'
 
   useEffect(() => { load() }, [])
 
@@ -231,11 +234,38 @@ export default function Atividades() {
       <div className="page-header">
         <div><h1 className="page-title">🗓️ Planejamento de Atividades</h1><p className="page-subtitle">Gerencie atividades e atribua tarefas à equipe</p></div>
         <div className="page-actions">
-          <button className="btn btn-outline btn-sm" onClick={() => toast('Use o botão 📅 em cada atividade.', 'info')}>📅 Agenda</button>
+          <div style={{ display:'flex', background:'var(--cinza-cl)', borderRadius:'var(--radius)', padding:3, gap:2 }}>
+            <button
+              className={`btn btn-sm ${vista==='lista' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ minHeight:32 }}
+              onClick={() => setVista('lista')}
+            >☰ Lista</button>
+            <button
+              className={`btn btn-sm ${vista==='calendario' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ minHeight:32 }}
+              onClick={() => setVista('calendario')}
+            >📅 Calendário</button>
+          </div>
           {isCoord && <button className="btn btn-gold" onClick={abrirNovo}>+ Nova Atividade</button>}
         </div>
       </div>
 
+      {/* ── Vista Calendário ── */}
+      {vista === 'calendario' && (
+        <div style={{ background:'white', borderRadius:'var(--radius-md)', boxShadow:'var(--shadow)', border:'1px solid var(--borda)', padding:'20px 20px 10px' }}>
+          <AtividadesCalendario
+            atividades={lista}
+            onAbrirAtividade={a => {
+              setVista('lista')
+              setTimeout(() => setExpandido(a.id), 100)
+            }}
+          />
+        </div>
+      )}
+
+      {/* ── Vista Lista ── */}
+      {vista === 'lista' && (
+        <>
       <div style={{ display:'flex', gap:10, marginBottom:18, flexWrap:'wrap', alignItems:'center' }}>
         <div className="tabs">
           {[['todos','Todas'],['planejada','📅 Planejadas'],['realizada','✅ Realizadas'],['cancelada','❌ Canceladas']].map(([v,l]) => (
@@ -325,6 +355,8 @@ export default function Atividades() {
           })}
         </div>
       )}
+        </>
+      )}{/* fim vista lista */}
 
       {/* ── Modal criar/editar ── */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editando ? '✏️ Editar Atividade' : '🗓️ Nova Atividade'} size="lg"
@@ -473,6 +505,7 @@ export default function Atividades() {
           </>
         )}
       </Modal>
+
     </div>
   )
 }

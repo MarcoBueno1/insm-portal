@@ -297,7 +297,25 @@ export default function LojaPedidos() {
       }
     }
 
-    toast('✅ Pagamento confirmado! Estoque atualizado.')
+    // ── Gera lançamento em Contas a Receber ──────────────────
+    const nomeCliente = p.loja_clientes?.nome || p.nome_avulso || 'Consumidor Final'
+    const dataHoje = new Date().toISOString().split('T')[0]
+    const descricaoLanc = `Venda Loja #${String(p.numero).padStart(4,'0')} — ${nomeCliente}`
+    await supabase.from('financeiro').insert({
+      tipo:            'receber',
+      descricao:       descricaoLanc,
+      valor:           Number(p.total),
+      categoria:       'Loja',
+      data_vencimento: dataHoje,
+      data_pagamento:  dataHoje,
+      status:          'pago',
+      favorecido:      nomeCliente,
+      observacao:      `Gerado automaticamente. Pedido #${String(p.numero).padStart(4,'0')}${p.vendedor_nome ? ' · Vendedor: ' + p.vendedor_nome : ''} · ${(p.loja_pedido_itens||[]).length} iten(s)`,
+      criado_por:      user?.id,
+      criado_por_nome: nomeUser,
+    })
+
+    toast('✅ Pagamento confirmado! Estoque atualizado e lançamento financeiro criado.')
     setModalConfirmar(null)
     setModalPix(null)
     setSaving(false)
