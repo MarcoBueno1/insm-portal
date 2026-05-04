@@ -94,37 +94,101 @@ export function gerarListaPresencaPDF(atividade, participantesSelecionados=[]) {
 
 // ── 2. Estoque ───────────────────────────────────────────────
 
-export function gerarRelatorioEstoquePDF(itens, ordem='alfabetica') {
-  // A lista 'itens' já deve vir ordenada do componente
-  const statusInfo = e => e.qtd_atual <= 0 
+export function gerarRelatorioEstoquePDF(itens, ordem='alfabetica', categoriaAtiva='Todos', todasCategorias=[], listaCompleta=[]) {
+  const statusInfo = e => e.qtd_atual <= 0
     ? { label:'🔴 Crítico', bg:'#fdf0ee', cor:'#c0392b' }
-    : e.qtd_atual <= e.qtd_minima 
+    : e.qtd_atual <= e.qtd_minima
     ? { label:'⚠️ Baixo', bg:'#fef3e8', cor:'#d4680a' }
     : { label:'✅ OK', bg:'#eaf5ee', cor:'#2e7d52' }
 
+  const st = (qtd, min) => qtd <= 0 ? 'critico' : qtd <= min ? 'baixo' : 'ok'
+
   const criticos = itens.filter(e => e.qtd_atual <= 0).length
-  const baixos = itens.filter(e => e.qtd_atual > 0 && e.qtd_atual <= e.qtd_minima).length
-  const ok = itens.length - criticos - baixos
+  const baixos   = itens.filter(e => e.qtd_atual > 0 && e.qtd_atual <= e.qtd_minima).length
+  const ok       = itens.length - criticos - baixos
+  const ordemLabel = ordem === 'alfabetica' ? 'Ordem Alfabética (A→Z)' : 'Ordem por Criticidade'
 
-  const rows = itens.map((e,i) => {
-    const s = statusInfo(e)
-    return `<tr style="background:${i%2===0?'#f8faff':'white'}">
-      <td>${e.produto}</td>
-      <td>${e.categoria||'—'}</td>
-      <td style="text-align:center;font-weight:700;color:${s.cor}">${e.qtd_atual}</td>
-      <td style="text-align:center;color:#6b7280">${e.qtd_minima}</td>
-      <td style="text-align:center;color:#6b7280">${e.unidade||'un'}</td>
-      <td style="text-align:center;background:${s.bg}"><span style="color:${s.cor};font-weight:700;font-size:11px">${s.label}</span></td>
-      ${e.observacao ? `<td style="font-size:11px;color:#6b7280">${e.observacao}</td>` : '<td style="color:#aaa">—</td>'}
-    </tr>`
-  }).join('')
+  // ── Helpers ──────────────────────────────────────────────
+  function renderTabela(lista, showCategoria=true) {
+    if (lista.length === 0) return '<p style="color:#888;font-size:12px;padding:8px 0">Nenhum item nesta categoria.</p>'
+    const rows = lista.map((e,i) => {
+      const s = statusInfo(e)
+      return `<tr style="background:${i%2===0?'#f8faff':'white'}">
+        <td><strong>${e.produto}</strong>${e.observacao?`<div style="font-size:10px;color:#888">${e.observacao}</div>`:''}</td>
+        ${showCategoria ? `<td><span style="background:#e8eef8;color:#2a5298;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700">${e.categoria||'—'}</span></td>` : ''}
+        <td style="text-align:center;font-weight:700;color:${s.cor};font-size:15px">${e.qtd_atual}</td>
+        <td style="text-align:center;color:#6b7280">${e.qtd_minima}</td>
+        <td style="text-align:center;color:#6b7280">${e.unidade||'un'}</td>
+        <td style="text-align:center;background:${s.bg}"><span style="color:${s.cor};font-weight:700;font-size:10px">${s.label}</span></td>
+      </tr>`
+    }).join('')
+    const catHeader = showCategoria ? '<th>Categoria</th>' : ''
+    return `<table>
+      <thead><tr><th>Produto</th>${catHeader}<th style="text-align:center">Qtd Atual</th><th style="text-align:center">Qtd Mín</th><th style="text-align:center">Un</th><th style="text-align:center">Status</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`
+  }
 
-  const ordemLabel = ordem === 'alfabetica' ? 'Ordem Alfabética (A→Z)' : 'Ordem por Criticidade (Crítico → Baixo → OK)'
+  // ── Sumário por categoria (para visão Todos) ─────────────
+  function resumoCategorias(lista) {
+    const cats = {}
+    lista.forEach(e => {
+      const c = e.categoria || 'Sem Categoria'
+      if (!cats[c]) cats[c] = { total:0, critico:0, baixo:0, ok:0 }
+      cats[c].total++
+      const s = st(e.qtd_atual, e.qtd_minima)
+      cats[c][s]++
+    })
+    return Object.entries(cats).sort((a,b) => a[0].localeCompare(b[0],'pt-BR')).map(([cat,d]) => `
+      <tr>
+        <td><strong>${cat}</strong></td>
+        <td style="text-align:center">${d.total}</td>
+        <td style="text-align:center;color:#2e7d52;font-weight:700">${d.ok}</td>
+        <td style="text-align:center;color:#d4680a;font-weight:700">${d.baixo}</td>
+        <td style="text-align:center;color:#c0392b;font-weight:700">${d.critico}</td>
+      </tr>`).join('')
+  }
+
+  // ── Conteúdo principal ───────────────────────────────────
+  let conteudo = ''
+
+  if (categoriaAtiva === 'Todos' && todasCategorias.length > 1) {
+    // Visão completa: sumário geral + seção por categoria
+    conteudo += `
+    <h2>📊 Resumo por Categoria</h2>
+    <table>
+      <thead><tr><th>Categoria</th><th style="text-align:center">Total</th><th style="text-align:center">✅ OK</th><th style="text-align:center">⚠️ Baixo</th><th style="text-align:center">🔴 Crítico</th></tr></thead>
+      <tbody>${resumoCategorias(itens)}</tbody>
+    </table>`
+
+    const cats = todasCategorias.filter(c => c !== 'Todos')
+    cats.forEach(cat => {
+      const itsCat = itens.filter(e => (e.categoria || 'Sem Categoria') === cat)
+      if (itsCat.length === 0) return
+      const crit = itsCat.filter(e => e.qtd_atual <= 0).length
+      const baix = itsCat.filter(e => e.qtd_atual > 0 && e.qtd_atual <= e.qtd_minima).length
+      const badge = crit > 0
+        ? `<span style="background:#fdf0ee;color:#c0392b;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;margin-left:8px">🔴 ${crit} crítico(s)</span>`
+        : baix > 0
+        ? `<span style="background:#fef3e8;color:#d4680a;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;margin-left:8px">⚠️ ${baix} baixo(s)</span>`
+        : `<span style="background:#eaf5ee;color:#2e7d52;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;margin-left:8px">✅ OK</span>`
+      conteudo += `<h2 style="margin-top:24px">📁 ${cat} <span style="font-size:13px;font-weight:400;color:#888">(${itsCat.length} ${itsCat.length===1?'item':'itens'})</span>${badge}</h2>`
+      conteudo += renderTabela(itsCat, false)
+    })
+  } else {
+    // Visão de categoria específica: tabela simples sem coluna categoria
+    conteudo = renderTabela(itens, false)
+  }
+
+  const catLabel = categoriaAtiva === 'Todos' ? 'Todas as Categorias' : `Categoria: ${categoriaAtiva}`
 
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório de Estoque</title>
-  <style>${estiloBase}</style></head><body>
-    ${cabecalho('Relatório de Estoque', `Ordenação: ${ordemLabel}`)}
-    
+  <style>
+    ${estiloBase}
+    h2{color:#1a3a6b;font-size:15px;margin:20px 0 8px;border-bottom:1px solid #dce3f0;padding-bottom:4px}
+  </style></head><body>
+    ${cabecalho('📦 Relatório de Estoque', `${catLabel} · Ordenação: ${ordemLabel}`)}
+
     <div class="resumo">
       <div class="res"><strong>${itens.length}</strong>Total de itens</div>
       <div class="res"><strong style="color:#2e7d52">${ok}</strong>Itens OK</div>
@@ -134,10 +198,7 @@ export function gerarRelatorioEstoquePDF(itens, ordem='alfabetica') {
 
     ${criticos > 0 ? `<div style="background:#fdf0ee;border:1px solid #c0392b;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#c0392b"><strong>⚠️ Atenção:</strong> ${criticos} item(s) com estoque zerado precisam de reposição urgente.</div>` : ''}
 
-    <table>
-      <thead><tr><th>Produto</th><th>Categoria</th><th>Qtd Atual</th><th>Qtd Mín</th><th>Unidade</th><th>Status</th><th>Observação</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
+    ${conteudo}
 
     ${rodape()}
   </body></html>`

@@ -42,6 +42,7 @@ export default function Estoque() {
   const [form, setForm] = useState(EMPTY)
   const [mov, setMov] = useState({ tipo: 'entrada', quantidade: '', motivo: '' })
   const [tab, setTab] = useState('estoque')
+  const [categoriaAtiva, setCategoriaAtiva] = useState('Todos')
 
   useEffect(() => { load() }, [])
 
@@ -187,6 +188,14 @@ export default function Estoque() {
       }
     })
 
+  // Categorias únicas ordenadas a partir da lista completa
+  const categorias = ['Todos', ...Array.from(new Set(lista.map(e => e.categoria || 'Sem Categoria').filter(Boolean))).sort((a,b) => a.localeCompare(b,'pt-BR',{sensitivity:'base'}))]
+
+  // Filtra por categoria ativa (aplicado SOBRE os filtrados de status/busca)
+  const filtradosPorCategoria = categoriaAtiva === 'Todos'
+    ? filtrados
+    : filtrados.filter(e => (e.categoria || 'Sem Categoria') === categoriaAtiva)
+
   const criticos = lista.filter(e => st(e.qtd_atual, e.qtd_minima) === 'critico').length
   const baixos = lista.filter(e => st(e.qtd_atual, e.qtd_minima) === 'baixo').length
   const histDoItem = modalHist ? historico.filter(h => h.estoque_id === modalHist.id) : []
@@ -203,7 +212,7 @@ export default function Estoque() {
         </div>
         <div className="page-actions">
           {/* Passa a lista já filtrada e ordenada para o PDF */}
-          <button className="btn btn-ghost btn-sm" onClick={() => gerarRelatorioEstoquePDF(filtrados, ordem)}>📄 PDF</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => gerarRelatorioEstoquePDF(filtradosPorCategoria, ordem, categoriaAtiva, categorias, lista)}>📄 PDF</button>
           {isCoord && <button className="btn btn-gold" onClick={abrirNovo}>+ Cadastrar Item</button>}
         </div>
       </div>
@@ -239,9 +248,63 @@ export default function Estoque() {
             ))}
           </div>
 
+          {/* ── Abas de Categoria ── */}
+          <div style={{ marginBottom: 14, overflowX: 'auto' }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap', minWidth: 'max-content' }}>
+              {categorias.map(cat => {
+                const count = cat === 'Todos'
+                  ? filtrados.length
+                  : filtrados.filter(e => (e.categoria || 'Sem Categoria') === cat).length
+                const temCritico = cat !== 'Todos' && filtrados.some(e => (e.categoria || 'Sem Categoria') === cat && st(e.qtd_atual, e.qtd_minima) === 'critico')
+                const temBaixo   = cat !== 'Todos' && !temCritico && filtrados.some(e => (e.categoria || 'Sem Categoria') === cat && st(e.qtd_atual, e.qtd_minima) === 'baixo')
+                const ativa = categoriaAtiva === cat
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setCategoriaAtiva(cat)}
+                    style={{
+                      padding: '7px 16px',
+                      borderRadius: 'var(--radius)',
+                      border: ativa ? '2px solid var(--azul)' : '1.5px solid var(--borda)',
+                      background: ativa ? 'var(--azul)' : 'white',
+                      color: ativa ? 'white' : 'var(--texto)',
+                      fontWeight: 700,
+                      fontSize: 12.5,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      whiteSpace: 'nowrap',
+                      boxShadow: ativa ? 'var(--shadow-sm)' : 'none',
+                      transition: 'all .15s',
+                      fontFamily: 'var(--font-body)',
+                    }}
+                  >
+                    {cat}
+                    {count > 0 && (
+                      <span style={{
+                        background: ativa ? 'rgba(255,255,255,.25)' : temCritico ? 'var(--vermelho-bg)' : temBaixo ? 'var(--laran-bg)' : 'var(--azul-suave)',
+                        color: ativa ? 'white' : temCritico ? 'var(--vermelho)' : temBaixo ? 'var(--laranja)' : 'var(--azul)',
+                        padding: '1px 7px',
+                        borderRadius: 10,
+                        fontSize: 11,
+                        fontWeight: 800,
+                      }}>{count}</span>
+                    )}
+                    {temCritico && !ativa && <span style={{ fontSize: 11 }}>🔴</span>}
+                    {temBaixo && !ativa && <span style={{ fontSize: 11 }}>⚠️</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           <div className="card">
             <div className="card-header">
-              <span className="card-title">📋 Itens em Estoque</span>
+              <span className="card-title">
+                📋 {categoriaAtiva === 'Todos' ? 'Todos os Itens' : categoriaAtiva}
+                <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--cinza)', marginLeft: 8 }}>({filtradosPorCategoria.length} {filtradosPorCategoria.length === 1 ? 'item' : 'itens'})</span>
+              </span>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 
                 {/* Seletor de Ordenação */}
@@ -264,13 +327,13 @@ export default function Estoque() {
             </div>
 
             {loading ? <div className="loading-center"><div className="spinner" /></div>
-              : filtrados.length === 0 ? (
+              : filtradosPorCategoria.length === 0 ? (
                 <div className="empty-state"><span className="empty-icon">📦</span><h3>Nenhum item</h3>{isCoord && <button className="btn btn-gold" onClick={abrirNovo}>Cadastrar</button>}</div>
               ) : (
                 <>
                   {/* Mobile: cards */}
                   <div className="hide-desktop" style={{ padding: '10px' }}>
-                    {filtrados.map(e => {
+                    {filtradosPorCategoria.map(e => {
                       const s = st(e.qtd_atual, e.qtd_minima); const si = ST[s]
                       return (
                         <div key={e.id} style={{ padding: '12px 14px', borderBottom: '1px solid var(--borda)', display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -308,7 +371,7 @@ export default function Estoque() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filtrados.map(e => {
+                        {filtradosPorCategoria.map(e => {
                           const s = st(e.qtd_atual, e.qtd_minima); const si = ST[s]
                           return (
                             <tr key={e.id}>
