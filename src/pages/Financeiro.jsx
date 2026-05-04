@@ -5,6 +5,7 @@ import { useToast } from '../hooks/useToast'
 import Modal from '../components/Modal'
 import { registrarAuditoria } from '../lib/auditoria'
 import { gerarRelatorioFinanceiroPDF } from '../lib/pdf'
+import FinanceiroCalendario from '../components/FinanceiroCalendario'
 
 const TIPOS = [
   { value:'receber', label:'💚 A Receber', icon:'💚', cor:'var(--verde)',   bg:'var(--verde-bg)' },
@@ -19,7 +20,7 @@ const STATUS = [
 const CAT_PAGAR   = ['Aluguel','Água','Luz','Internet','Material Escolar','Alimentação','Transporte','Salários','Impostos','Outros']
 const CAT_RECEBER = ['Doações','Mensalidades','Arrecadação','Eventos','Patrocínios','Subvenções','Outros']
 
-const FORM_VAZIO = { tipo:'pagar', descricao:'', valor:'', categoria:'', data_vencimento:'', data_pagamento:'', status:'pendente', observacao:'', favorecido:'' }
+const FORM_VAZIO = { tipo:'pagar', descricao:'', valor:'', categoria:'', data_vencimento:'', data_pagamento:'', status:'pendente', observacao:'', favorecido:'', repeticoes:1 }
 const fmt = v => Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
 const hoje = () => new Date().toISOString().split('T')[0]
 
@@ -45,6 +46,9 @@ export default function Financeiro() {
   const [filtroMes, setFiltroMes]     = useState(() => {
     const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`
   })
+  // Vista calendário por aba
+  const [vistaReceber, setVistaReceber] = useState('lista')   // 'lista' | 'calendario'
+  const [vistaPagar,   setVistaPagar]   = useState('lista')
 
   // Upload de documento
   const [docFile, setDocFile]         = useState(null)
@@ -75,7 +79,7 @@ export default function Financeiro() {
     setEditando(l)
     setForm({ tipo:l.tipo, descricao:l.descricao, valor:l.valor, categoria:l.categoria||'',
       data_vencimento:l.data_vencimento||'', data_pagamento:l.data_pagamento||'',
-      status:l.status, observacao:l.observacao||'', favorecido:l.favorecido||'' })
+      status:l.status, observacao:l.observacao||'', favorecido:l.favorecido||'', repeticoes:1 })
     setDocFile(null)
     setDocPreview(null)
     setModalOpen(true)
@@ -110,7 +114,7 @@ export default function Financeiro() {
       toast('Preencha descrição, valor e vencimento.','error'); return
     }
     setSaving(true)
-    const payload = { tipo:form.tipo, descricao:form.descricao,
+    const basePayload = { tipo:form.tipo, descricao:form.descricao,
       valor: parseFloat(String(form.valor).replace(',','.')),
       categoria:form.categoria, data_vencimento:form.data_vencimento,
       data_pagamento:form.data_pagamento||null, status:form.status,
@@ -126,28 +130,49 @@ export default function Financeiro() {
         setUploadingDoc(false)
       }
       const { error } = await supabase.from('financeiro').update({
-        ...payload, documento_url: docUrl, atualizado_em:new Date().toISOString()
+        ...basePayload, documento_url: docUrl, atualizado_em:new Date().toISOString()
       }).eq('id', editando.id)
       if (error) { toast('Erro: '+error.message,'error'); setSaving(false); return }
       await registrarAuditoria({ tabela:'financeiro', registro_id:editando.id, acao:'editar',
         descricao:'Lançamento "'+form.descricao+'" editado',
         valor_anterior:{ descricao:editando.descricao, valor:editando.valor, status:editando.status },
-        valor_novo:{ descricao:form.descricao, valor:payload.valor, status:form.status },
+        valor_novo:{ descricao:form.descricao, valor:basePayload.valor, status:form.status },
         usuario_id:user.id, usuario_nome:nomeUser })
       toast('Lançamento atualizado!')
     } else {
-      const { data, error } = await supabase.from('financeiro').insert(payload).select().single()
+      // ── Repetição de meses ──────────────────────────────────
+      const repeticoes = Math.max(1, parseInt(form.repeticoes)||1)
+      const [baseAno, baseMes, baseDia] = form.data_vencimento.split('-').map(Number)
+      const lotes = []
+      for (let i = 0; i < repeticoes; i++) {
+        let m = baseMes - 1 + i       // 0-based
+        let a = baseAno + Math.floor(m / 12)
+        m = m % 12
+        const diasNoMes = new Date(a, m + 1, 0).getDate()
+        const dia = Math.min(baseDia, diasNoMes)
+        const dataVenc = `${a}-${String(m+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`
+        const descricao = repeticoes > 1
+          ? `${form.descricao} (${i+1}/${repeticoes})`
+          : form.descricao
+        lotes.push({ ...basePayload, descricao, data_vencimento: dataVenc,
+          // Parcelas futuras sempre pendentes
+          status: i === 0 ? basePayload.status : 'pendente',
+          data_pagamento: i === 0 ? basePayload.data_pagamento : null,
+        })
+      }
+      const { data: criados, error } = await supabase.from('financeiro').insert(lotes).select()
       if (error) { toast('Erro: '+error.message,'error'); setSaving(false); return }
-      if (docFile && data?.id) {
+      // Upload de doc apenas para o primeiro lançamento
+      if (docFile && criados?.[0]?.id) {
         setUploadingDoc(true)
-        const url = await uploadDocumento(data.id)
-        if (url) await supabase.from('financeiro').update({ documento_url: url }).eq('id', data.id)
+        const url = await uploadDocumento(criados[0].id)
+        if (url) await supabase.from('financeiro').update({ documento_url: url }).eq('id', criados[0].id)
         setUploadingDoc(false)
       }
-      await registrarAuditoria({ tabela:'financeiro', registro_id:data?.id, acao:'criar',
-        descricao:'Lançamento "'+form.descricao+'" criado ('+form.tipo+')',
-        valor_novo:payload, usuario_id:user.id, usuario_nome:nomeUser })
-      toast('Lançamento criado!')
+      await registrarAuditoria({ tabela:'financeiro', registro_id:criados?.[0]?.id, acao:'criar',
+        descricao:`${repeticoes > 1 ? repeticoes+'x ' : ''}Lançamento "${form.descricao}" criado (${form.tipo})`,
+        valor_novo:basePayload, usuario_id:user.id, usuario_nome:nomeUser })
+      toast(repeticoes > 1 ? `✅ ${repeticoes} lançamentos criados!` : 'Lançamento criado!')
     }
     setModalOpen(false); load(); setSaving(false)
   }
@@ -441,30 +466,74 @@ export default function Financeiro() {
       {/* ═════════ A RECEBER ═════════ */}
       {aba==='receber' && (
         <>
-          <div style={{ display:'flex', gap:12, alignItems:'center', marginBottom:18, flexWrap:'wrap' }}>
-            <select className="form-select" style={{ width:'auto' }} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
-              <option value="todos">Todos os status</option>
-              {STATUS.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-            <span style={{ fontSize:12, color:'var(--cinza)', marginLeft:'auto' }}>{listaReceber.length} lançamento(s) · Total: <strong style={{ color:'var(--verde)' }}>{fmt(listaReceber.reduce((s,l)=>s+Number(l.valor||0),0))}</strong></span>
-            {isCoord && <button className="btn btn-success" onClick={()=>abrirNovo('receber')}>+ Nova entrada</button>}
+          <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:16, flexWrap:'wrap' }}>
+            {/* Toggle lista/calendário */}
+            <div style={{ display:'flex', background:'var(--cinza-cl)', borderRadius:'var(--radius)', padding:3, gap:2 }}>
+              <button className={`btn btn-sm ${vistaReceber==='lista'?'btn-primary':'btn-ghost'}`} style={{ minHeight:30 }} onClick={()=>setVistaReceber('lista')}>☰ Lista</button>
+              <button className={`btn btn-sm ${vistaReceber==='calendario'?'btn-primary':'btn-ghost'}`} style={{ minHeight:30 }} onClick={()=>setVistaReceber('calendario')}>📅 Calendário</button>
+            </div>
+            {vistaReceber === 'lista' && (
+              <select className="form-select" style={{ width:'auto' }} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
+                <option value="todos">Todos os status</option>
+                {STATUS.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            )}
+            <span style={{ fontSize:12, color:'var(--cinza)', marginLeft:'auto' }}>
+              {listaReceber.length} lançamento(s) · <strong style={{ color:'var(--verde)' }}>{fmt(listaReceber.reduce((s,l)=>s+Number(l.valor||0),0))}</strong>
+            </span>
+            {isCoord && vistaReceber === 'lista' && <button className="btn btn-success" onClick={()=>abrirNovo('receber')}>+ Nova entrada</button>}
           </div>
-          {loading ? <div className="loading-center"><div className="spinner"/></div> : <TabelaLanc lista={listaReceber} tipo="receber"/>}
+
+          {vistaReceber === 'calendario' ? (
+            <div style={{ background:'white', borderRadius:'var(--radius-md)', boxShadow:'var(--shadow)', border:'1px solid var(--borda)', padding:'18px 18px 10px' }}>
+              <FinanceiroCalendario
+                lancamentos={lancamentos}
+                tipo="receber"
+                isCoord={isCoord}
+                abrirNovo={abrirNovo}
+                onAbrirLancamento={l => { setVistaReceber('lista'); setTimeout(() => abrirEditar(l), 100) }}
+              />
+            </div>
+          ) : (
+            loading ? <div className="loading-center"><div className="spinner"/></div> : <TabelaLanc lista={listaReceber} tipo="receber"/>
+          )}
         </>
       )}
 
       {/* ═════════ A PAGAR ═════════ */}
       {aba==='pagar' && (
         <>
-          <div style={{ display:'flex', gap:12, alignItems:'center', marginBottom:18, flexWrap:'wrap' }}>
-            <select className="form-select" style={{ width:'auto' }} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
-              <option value="todos">Todos os status</option>
-              {STATUS.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-            <span style={{ fontSize:12, color:'var(--cinza)', marginLeft:'auto' }}>{listaPagar.length} lançamento(s) · Total: <strong style={{ color:'var(--vermelho)' }}>{fmt(listaPagar.reduce((s,l)=>s+Number(l.valor||0),0))}</strong></span>
-            {isCoord && <button className="btn btn-danger" onClick={()=>abrirNovo('pagar')}>+ Nova despesa</button>}
+          <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:16, flexWrap:'wrap' }}>
+            {/* Toggle lista/calendário */}
+            <div style={{ display:'flex', background:'var(--cinza-cl)', borderRadius:'var(--radius)', padding:3, gap:2 }}>
+              <button className={`btn btn-sm ${vistaPagar==='lista'?'btn-primary':'btn-ghost'}`} style={{ minHeight:30 }} onClick={()=>setVistaPagar('lista')}>☰ Lista</button>
+              <button className={`btn btn-sm ${vistaPagar==='calendario'?'btn-primary':'btn-ghost'}`} style={{ minHeight:30 }} onClick={()=>setVistaPagar('calendario')}>📅 Calendário</button>
+            </div>
+            {vistaPagar === 'lista' && (
+              <select className="form-select" style={{ width:'auto' }} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
+                <option value="todos">Todos os status</option>
+                {STATUS.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            )}
+            <span style={{ fontSize:12, color:'var(--cinza)', marginLeft:'auto' }}>
+              {listaPagar.length} lançamento(s) · <strong style={{ color:'var(--vermelho)' }}>{fmt(listaPagar.reduce((s,l)=>s+Number(l.valor||0),0))}</strong>
+            </span>
+            {isCoord && vistaPagar === 'lista' && <button className="btn btn-danger" onClick={()=>abrirNovo('pagar')}>+ Nova despesa</button>}
           </div>
-          {loading ? <div className="loading-center"><div className="spinner"/></div> : <TabelaLanc lista={listaPagar} tipo="pagar"/>}
+
+          {vistaPagar === 'calendario' ? (
+            <div style={{ background:'white', borderRadius:'var(--radius-md)', boxShadow:'var(--shadow)', border:'1px solid var(--borda)', padding:'18px 18px 10px' }}>
+              <FinanceiroCalendario
+                lancamentos={lancamentos}
+                tipo="pagar"
+                isCoord={isCoord}
+                abrirNovo={abrirNovo}
+                onAbrirLancamento={l => { setVistaPagar('lista'); setTimeout(() => abrirEditar(l), 100) }}
+              />
+            </div>
+          ) : (
+            loading ? <div className="loading-center"><div className="spinner"/></div> : <TabelaLanc lista={listaPagar} tipo="pagar"/>
+          )}
         </>
       )}
 
@@ -620,6 +689,39 @@ export default function Financeiro() {
           <input className="form-input" placeholder={form.tipo==='pagar'?'Ex: Enel, fornecedor...':'Ex: Prefeitura, doador...'}
             value={form.favorecido} onChange={e=>setForm(f=>({...f,favorecido:e.target.value}))} />
         </div>
+        {/* Campo repetição — apenas para novos lançamentos */}
+        {!editando && (
+          <div className="form-group">
+            <label className="form-label" style={{ display:'flex', alignItems:'center', gap:8 }}>
+              🔄 Repetir por quantos meses?
+              <span style={{ fontSize:11, fontWeight:400, color:'var(--cinza)', fontStyle:'italic' }}>
+                (1 = apenas este mês)
+              </span>
+            </label>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <input
+                className="form-input"
+                type="number" min="1" max="60" step="1"
+                style={{ width:90 }}
+                value={form.repeticoes}
+                onChange={e => setForm(f => ({ ...f, repeticoes: Math.max(1, parseInt(e.target.value)||1) }))}
+              />
+              {form.repeticoes > 1 && (
+                <span style={{ fontSize:12, color:'var(--azul)', fontWeight:600, background:'var(--azul-suave)', padding:'4px 10px', borderRadius:8 }}>
+                  📅 Serão criados {form.repeticoes} lançamentos mensais
+                  {form.data_vencimento ? (() => {
+                    const [a,m,d] = form.data_vencimento.split('-').map(Number)
+                    const ultM = (m - 1 + form.repeticoes - 1) % 12
+                    const ultA = a + Math.floor((m - 1 + form.repeticoes - 1) / 12)
+                    const ultData = new Date(ultA, ultM, 1).toLocaleDateString('pt-BR', { month:'long', year:'numeric' })
+                    return ` até ${ultData}`
+                  })() : ''}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="form-group">
           <label className="form-label">Observação</label>
           <textarea className="form-textarea" rows="2" placeholder="Observações..."
