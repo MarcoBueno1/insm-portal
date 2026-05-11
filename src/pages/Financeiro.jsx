@@ -6,6 +6,15 @@ import Modal from '../components/Modal'
 import { registrarAuditoria } from '../lib/auditoria'
 import { gerarRelatorioFinanceiroPDF } from '../lib/pdf'
 import FinanceiroCalendario from '../components/FinanceiroCalendario'
+import SelectCadastravel from '../components/SelectCadastravel'
+import { gerarPixPayload, pixQrCodeUrl } from '../lib/pix'
+
+// ── Configuração Pix (mesma fonte usada na Loja) ────────────────
+const PIX_CONFIG = {
+  chave:  import.meta.env.VITE_PIX_CHAVE    || 'CONFIGURE_VITE_PIX_CHAVE',
+  nome:   import.meta.env.VITE_PIX_NOME     || 'Instituto',
+  cidade: import.meta.env.VITE_PIX_CIDADE   || 'Cidade',
+}
 
 const TIPOS = [
   { value:'receber', label:'💚 A Receber', icon:'💚', cor:'var(--verde)',   bg:'var(--verde-bg)' },
@@ -17,8 +26,6 @@ const STATUS = [
   { value:'vencido',   label:'🔴 Vencido',       cor:'var(--vermelho)',bg:'var(--vermelho-bg)' },
   { value:'cancelado', label:'⚫ Cancelado',     cor:'var(--cinza)',   bg:'var(--cinza-cl)' },
 ]
-const CAT_PAGAR   = ['Aluguel','Água','Luz','Internet','Material Escolar','Alimentação','Transporte','Salários','Impostos','Outros']
-const CAT_RECEBER = ['Doações','Mensalidades','Arrecadação','Eventos','Patrocínios','Subvenções','Outros']
 
 const FORM_VAZIO = { tipo:'pagar', descricao:'', valor:'', categoria:'', data_vencimento:'', data_pagamento:'', status:'pendente', observacao:'', favorecido:'', repeticoes:1 }
 const fmt = v => Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
@@ -49,6 +56,34 @@ export default function Financeiro() {
   // Vista calendário por aba
   const [vistaReceber, setVistaReceber] = useState('lista')   // 'lista' | 'calendario'
   const [vistaPagar,   setVistaPagar]   = useState('lista')
+
+  // ── Pix Avulso ────────────────────────────────────────────────
+  const [pixValor, setPixValor]       = useState('')
+  const [pixDesc, setPixDesc]         = useState('')
+  const [pixPayload, setPixPayload]   = useState('')
+  const [pixQrUrl, setPixQrUrl]       = useState('')
+  const [pixGerado, setPixGerado]     = useState(false)
+
+  function gerarPix() {
+    const val = parseFloat(String(pixValor).replace(',', '.'))
+    if (!val || val <= 0) return
+    const txid = ('AVULSO' + Date.now()).substring(0, 25)
+    const payload = gerarPixPayload({
+      chave: PIX_CONFIG.chave,
+      nome: PIX_CONFIG.nome,
+      cidade: PIX_CONFIG.cidade,
+      valor: val,
+      txid,
+      descricao: pixDesc.trim() || 'Pix Avulso',
+    })
+    setPixPayload(payload)
+    setPixQrUrl(pixQrCodeUrl(payload, 280))
+    setPixGerado(true)
+  }
+
+  function resetarPix() {
+    setPixValor(''); setPixDesc(''); setPixPayload(''); setPixQrUrl(''); setPixGerado(false)
+  }
 
   // Upload de documento
   const [docFile, setDocFile]         = useState(null)
@@ -367,7 +402,7 @@ export default function Financeiro() {
 
       {/* Abas */}
       <div className="tabs" style={{ marginBottom:22 }}>
-        {[['dashboard','📊 Dashboard'],['receber','💚 A Receber'],['pagar','🔴 A Pagar'],['relatorio','📄 Relatório']].map(([v,l])=>(
+        {[['dashboard','📊 Dashboard'],['receber','💚 A Receber'],['pagar','🔴 A Pagar'],['relatorio','📄 Relatório'],['pix','💳 Pix Avulso']].map(([v,l])=>(
           <button key={v} className={'tab '+(aba===v?'active':'')} onClick={()=>setAba(v)}>{l}</button>
         ))}
       </div>
@@ -632,6 +667,176 @@ export default function Financeiro() {
         </>
       )}
 
+      {/* ═════════ PIX AVULSO ═════════ */}
+      {aba === 'pix' && (
+        <div style={{ maxWidth: 520, margin: '0 auto' }}>
+
+          {/* Card de configuração / alerta se chave não configurada */}
+          {PIX_CONFIG.chave === 'CONFIGURE_VITE_PIX_CHAVE' && (
+            <div className="card" style={{ padding: '14px 18px', border: '1.5px solid var(--laranja)', background: 'var(--laran-bg)', marginBottom: 20, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 20 }}>⚠️</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--laranja)' }}>Chave Pix não configurada</div>
+                <div style={{ fontSize: 12, color: 'var(--cinza-medio)', marginTop: 3 }}>
+                  Defina <code style={{ background: 'white', padding: '1px 5px', borderRadius: 4 }}>VITE_PIX_CHAVE</code>,{' '}
+                  <code style={{ background: 'white', padding: '1px 5px', borderRadius: 4 }}>VITE_PIX_NOME</code> e{' '}
+                  <code style={{ background: 'white', padding: '1px 5px', borderRadius: 4 }}>VITE_PIX_CIDADE</code> no arquivo <code style={{ background: 'white', padding: '1px 5px', borderRadius: 4 }}>.env</code> do projeto.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Formulário */}
+          {!pixGerado ? (
+            <div className="card" style={{ padding: '28px 28px 24px' }}>
+              <div style={{ textAlign: 'center', marginBottom: 24 }}>
+                <div style={{ fontSize: 42, marginBottom: 6 }}>💳</div>
+                <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--azul)', margin: 0 }}>Gerar Pix Avulso</h2>
+                <p style={{ fontSize: 13, color: 'var(--cinza-medio)', marginTop: 6 }}>
+                  Digite o valor e gere o QR Code instantaneamente
+                </p>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 18 }}>
+                <label className="form-label" style={{ fontSize: 13, fontWeight: 700 }}>Valor (R$) *</label>
+                <input
+                  className="form-input"
+                  type="number" min="0.01" step="0.01" placeholder="0,00"
+                  style={{ fontSize: 22, fontWeight: 800, textAlign: 'center', color: 'var(--azul)', padding: '14px 16px' }}
+                  value={pixValor}
+                  onChange={e => { setPixValor(e.target.value); setPixGerado(false) }}
+                  onKeyDown={e => e.key === 'Enter' && gerarPix()}
+                  autoFocus
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 24 }}>
+                <label className="form-label" style={{ fontSize: 13, fontWeight: 700 }}>Descrição <span style={{ fontWeight: 400, color: 'var(--cinza)' }}>(opcional)</span></label>
+                <input
+                  className="form-input"
+                  placeholder="Ex: Mensalidade, Doação, Evento..."
+                  value={pixDesc}
+                  onChange={e => { setPixDesc(e.target.value); setPixGerado(false) }}
+                  onKeyDown={e => e.key === 'Enter' && gerarPix()}
+                />
+              </div>
+
+              <button
+                className="btn btn-primary"
+                style={{ width: '100%', padding: '14px', fontSize: 15, fontWeight: 800, borderRadius: 10 }}
+                onClick={gerarPix}
+                disabled={!pixValor || parseFloat(String(pixValor).replace(',', '.')) <= 0}
+              >
+                ⚡ Gerar QR Code Pix
+              </button>
+
+              {/* Info recebedor */}
+              <div style={{ marginTop: 18, padding: '10px 14px', background: 'var(--azul-suave)', borderRadius: 8, display: 'flex', gap: 10, alignItems: 'center' }}>
+                <span style={{ fontSize: 16 }}>🔑</span>
+                <div style={{ fontSize: 12 }}>
+                  <span style={{ color: 'var(--cinza-medio)' }}>Recebedor: </span>
+                  <strong style={{ color: 'var(--azul)' }}>{PIX_CONFIG.nome}</strong>
+                  <span style={{ color: 'var(--cinza)', margin: '0 6px' }}>·</span>
+                  <span style={{ color: 'var(--cinza-medio)' }}>Chave: </span>
+                  <strong style={{ color: 'var(--azul)', wordBreak: 'break-all' }}>{PIX_CONFIG.chave}</strong>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* ── Resultado: QR Code gerado ── */
+            <div className="card" style={{ padding: '28px 28px 24px', textAlign: 'center' }}>
+
+              {/* Valor em destaque */}
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 900, color: 'var(--azul)', marginBottom: 4 }}>
+                {fmt(parseFloat(String(pixValor).replace(',', '.')))}
+              </div>
+              {pixDesc && (
+                <div style={{ fontSize: 13, color: 'var(--cinza-medio)', marginBottom: 16, fontStyle: 'italic' }}>"{pixDesc}"</div>
+              )}
+
+              <p style={{ fontSize: 13, color: 'var(--cinza-medio)', marginBottom: 18 }}>
+                Aponte a câmera do celular ou compartilhe o código abaixo
+              </p>
+
+              {/* QR Code */}
+              <div style={{ display: 'inline-block', background: 'white', borderRadius: 16, padding: 16, boxShadow: 'var(--shadow-md)', marginBottom: 20, border: '2px solid var(--azul-claro)' }}>
+                <img src={pixQrUrl} alt="QR Code Pix" width={230} height={230}
+                  style={{ display: 'block', borderRadius: 8 }} />
+              </div>
+
+              {/* Chave */}
+              <div style={{ background: 'var(--azul-suave)', borderRadius: 8, padding: '8px 14px', fontSize: 12.5, color: 'var(--azul)', fontWeight: 700, marginBottom: 14 }}>
+                🔑 {PIX_CONFIG.nome} — Chave: {PIX_CONFIG.chave}
+              </div>
+
+              {/* Botões de ação */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <button
+                  className="btn btn-primary"
+                  style={{ padding: '12px', fontSize: 14, fontWeight: 700, borderRadius: 10 }}
+                  onClick={() => { navigator.clipboard.writeText(pixPayload); toast('✅ Código Pix copiado!') }}
+                >
+                  📋 Copiar código Pix (Copia e Cola)
+                </button>
+
+                <button
+                  className="btn btn-ghost"
+                  style={{ padding: '12px', fontSize: 14, fontWeight: 700, borderRadius: 10 }}
+                  onClick={() => {
+                    const link = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(pixPayload)}&ecc=M`
+                    navigator.clipboard.writeText(link)
+                    toast('🔗 Link do QR Code copiado!')
+                  }}
+                >
+                  🔗 Copiar link do QR Code
+                </button>
+
+                <button
+                  className="btn btn-ghost"
+                  style={{ padding: '12px', fontSize: 14, borderRadius: 10 }}
+                  onClick={() => {
+                    const win = window.open('', '_blank')
+                    const val = fmt(parseFloat(String(pixValor).replace(',', '.')))
+                    const desc = pixDesc ? `<p style="color:#666;font-size:15px;margin:0 0 16px">"${pixDesc}"</p>` : ''
+                    win.document.write(`<!DOCTYPE html><html><head><title>Pix ${val}</title>
+                      <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#f0f4ff;padding:24px}
+                      .card{background:white;border-radius:16px;padding:32px 28px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.12);max-width:360px;width:100%}
+                      h1{color:#1a3a6b;font-size:32px;margin-bottom:6px}p{color:#888;margin-bottom:20px;font-size:14px}
+                      img{border-radius:12px;border:2px solid #e0e8ff}
+                      .chave{background:#f0f4ff;border-radius:8px;padding:10px 14px;font-size:12px;color:#1a3a6b;font-weight:700;margin:16px 0;word-break:break-all}
+                      .code{background:#f7f7f7;border-radius:8px;padding:10px 12px;font-size:9px;color:#aaa;word-break:break-all;text-align:left}
+                      @media print{body{background:white}.card{box-shadow:none}}</style></head>
+                      <body><div class="card">
+                        <h1>${val}</h1>${desc}
+                        <p>Aponte a câmera para pagar</p>
+                        <img src="${pixQrUrl}" width="240" height="240"/>
+                        <div class="chave">🔑 ${PIX_CONFIG.nome} · ${PIX_CONFIG.chave}</div>
+                        <div class="code">${pixPayload}</div>
+                      </div></body></html>`)
+                    win.document.close()
+                  }}
+                >
+                  🌐 Abrir página para compartilhar
+                </button>
+
+                <button
+                  className="btn btn-ghost"
+                  style={{ padding: '10px', fontSize: 13, borderRadius: 10, color: 'var(--cinza-medio)' }}
+                  onClick={resetarPix}
+                >
+                  ↩️ Gerar novo Pix
+                </button>
+              </div>
+
+              {/* Código bruto */}
+              <div style={{ marginTop: 18, background: 'var(--cinza-cl)', borderRadius: 8, padding: '8px 10px', fontSize: 9, color: 'var(--cinza)', wordBreak: 'break-all', textAlign: 'left', lineHeight: 1.5 }}>
+                {pixPayload}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ══ Modal de lançamento ══ */}
       <Modal open={modalOpen} onClose={()=>setModalOpen(false)}
         title={editando ? '✏️ Editar Lançamento' : (form.tipo==='pagar'?'🔴 Nova Conta a Pagar':'💚 Nova Conta a Receber')}
@@ -668,10 +873,12 @@ export default function Financeiro() {
           </div>
           <div className="form-group">
             <label className="form-label">Categoria</label>
-            <select className="form-select" value={form.categoria} onChange={e=>setForm(f=>({...f,categoria:e.target.value}))}>
-              <option value="">Selecione...</option>
-              {(form.tipo==='pagar'?CAT_PAGAR:CAT_RECEBER).map(c=><option key={c} value={c}>{c}</option>)}
-            </select>
+            <SelectCadastravel
+              categoria={form.tipo === 'pagar' ? 'categorias_financeiro_pagar' : 'categorias_financeiro_receber'}
+              value={form.categoria}
+              onChange={val => setForm(f => ({ ...f, categoria: val }))}
+              placeholder="Selecione..."
+            />
           </div>
         </div>
         <div className="form-row form-row-2">
